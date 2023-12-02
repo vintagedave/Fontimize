@@ -105,7 +105,7 @@ class TestCharRanges(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    #unittest.main()
 
     print("Example usage:")
 
@@ -126,6 +126,11 @@ if __name__ == '__main__':
 
     for r in char_ranges:
         print(r.get_range())
+
+    print("uranges")
+    uranges = ['custom', ', '.join(r.get_range() for r in char_ranges)]
+    print(uranges)
+
 
 
 
