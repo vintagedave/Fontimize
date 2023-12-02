@@ -23,6 +23,10 @@ def optimise_fonts(articles : list[FileToArticle.FileToArticle]):
     print(characters)
 
 
+def _get_unicode_string(char : chr) -> str:
+    return 'U+' + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
+
+
 class charPair:
     def __init__(self, first : chr, second : chr):
         self.first = first
@@ -39,6 +43,13 @@ class charPair:
         if isinstance(other, charPair):
             return self.first == other.first and self.second == other.second
         return False
+    
+    def get_range(self):
+        if self.first == self.second:
+            return _get_unicode_string(self.first)
+        else:
+            return _get_unicode_string(self.first) + '-' + _get_unicode_string(self.second)
+
 
 # Taking a sorted list of characters, find the sequential subsets and return pairs of the start and end
 # of each sequential subset
@@ -81,6 +92,18 @@ class TestCharRanges(unittest.TestCase):
         self.assertEqual(get_char_ranges(['a', 'b', 'd', 'e', 'f', 'h']), [charPair('a', 'b'), charPair('d', 'f'), charPair('h', 'h')])
 
 
+    def test_get_range_with_single_char(self):
+        self.assertEqual(charPair('a', 'a').get_range(), 'U+0061')
+
+    def test_get_range_with_two_chars(self):
+        self.assertEqual(charPair('a', 'b').get_range(), 'U+0061-U+0062')
+
+    def test_get_range_with_multiple_chars(self):
+        self.assertEqual(charPair('a', 'd').get_range(), 'U+0061-U+0064')
+
+
+
+
 if __name__ == '__main__':
     unittest.main()
 
@@ -100,6 +123,9 @@ if __name__ == '__main__':
     print("")
     print("Ranges!")
     print(char_ranges)
+
+    for r in char_ranges:
+        print(r.get_range())
 
 
 
