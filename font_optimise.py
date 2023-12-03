@@ -6,13 +6,13 @@ from ttf2web import TTF2Web
 def _get_unicode_string(char : chr, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
 
-def get_used_characters_in_str(s : str):
+def get_used_characters_in_str(s : str) -> set[chr]:
     res : set[chr] = { " " } # Error when trying to add to an empty set! Space seems a fine initial value
     for c in s:
         res.add(c)
     return res
 
-def get_used_characters_in_html(html : str):
+def get_used_characters_in_html(html : str) -> set[chr]:
     soup = BeautifulSoup(html, 'html.parser')
     text = soup.get_text()
     return get_used_characters_in_str(text)
@@ -70,7 +70,7 @@ def _get_char_ranges(chars : list[chr]):
 def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", verbose : bool = False) -> dict[str, str]:
     verbosity = 2 if verbose else 1 # Matching ttf2web
 
-    characters = _get_used_characters(text)
+    characters = get_used_characters_in_str(text)
 
     char_list = list(characters)
     char_list.sort()
@@ -95,12 +95,13 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", verbose :
         assertdir = fontpath if fontpath else os.path.dirname(font)
         t2w = TTF2Web(font, uranges, assetdir='output_temp')
         woff2_list = t2w.generateWoff2(verbosity=verbosity)
-        print(woff2_list)
+        # print(woff2_list)
+        assert len(woff2_list) == 1 # We only expect one font file to be generated
+        res[font] = woff2_list[0][0]
 
     # Return a dict of input font file -> output font file, eg for CSS to be updated
+    return res
 
-    # print("Characters!")
-    # print(characters)
 
 def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontpath : str = "", verbose : bool = False) -> dict[str, str]:
     text = ""
@@ -117,10 +118,12 @@ def optimise_fonts_for_html(html_contents : list[str], fonts : list[str], fontpa
 
 
 if __name__ == '__main__':
-    optimise_fonts("Hello world",
-                   ['fonts/text/EB_Garamond/EBGaramond-VariableFont_wght.ttf', 'fonts/text/EB_Garamond/EBGaramond-Italic-VariableFont_wght.ttf'],
-                   fontpath='output_temp',
-                   verbose=True)
+    generated = optimise_fonts("Hello world",
+                               ['fonts/text/EB_Garamond/EBGaramond-VariableFont_wght.ttf', 'fonts/text/EB_Garamond/EBGaramond-Italic-VariableFont_wght.ttf'],
+                               fontpath='output_temp',
+                               verbose=True)
+    print("Generated:")
+    print(generated)
 
     
     # unittest.main()
