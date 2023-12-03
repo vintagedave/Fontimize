@@ -1,17 +1,10 @@
 import ttf2web
-import FileToArticle
 from bs4 import BeautifulSoup
-import unittest
 from ttf2web import TTF2Web
 
     
 def _get_unicode_string(char : chr, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
-
-def get_used_characters_in_html(html : str):
-    soup = BeautifulSoup(html, 'html.parser')
-    text = soup.get_text()
-    return get_used_characters_in_str(text)
 
 def get_used_characters_in_str(s : str):
     res : set[chr] = { " " } # Error when trying to add to an empty set! Space seems a fine initial value
@@ -19,16 +12,10 @@ def get_used_characters_in_str(s : str):
         res.add(c)
     return res
 
-def _get_used_characters(article : FileToArticle.FileToArticle):
-    return get_used_characters_in_html(article.output_html)
-
-def optimise_fonts(articles : list[FileToArticle.FileToArticle]):
-    characters : set[chr] = { " " }
-    for a in articles:
-        characters = characters.union(_get_used_characters(a))
-
-    print("Characters!")
-    print(characters)
+def get_used_characters_in_html(html : str):
+    soup = BeautifulSoup(html, 'html.parser')
+    text = soup.get_text()
+    return get_used_characters_in_str(text)
 
 class charPair:
     def __init__(self, first : chr, second : chr):
@@ -78,37 +65,65 @@ def _get_char_ranges(chars : list[chr]):
     return res
 
 
-class TestCharRanges(unittest.TestCase):
-    def test_empty(self):
-        self.assertEqual(_get_char_ranges([]), [])
+# Takes the input text, and the fonts, and generates new font files
+# Other methods (eg taking HTML files, or multiple pieces of text) all end up here
+def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", verbose : bool = False) -> dict[str, str]:
+    verbosity = 2 if verbose else 1 # Matching ttf2web
 
-    def test_single_char(self):
-        self.assertEqual(_get_char_ranges(['a']), [charPair('a', 'a')])
+    characters = _get_used_characters(text)
 
-    def test_two_sequential_chars(self):
-        self.assertEqual(_get_char_ranges(['a', 'b']), [charPair('a', 'b')])
+    char_list = list(characters)
+    char_list.sort()
+    if verbosity >= 2:
+        print("Characters:")
+        print(char_list)
 
-    def test_two_nonsequential_chars(self):
-        self.assertEqual(_get_char_ranges(['a', 'c']), [charPair('a', 'a'), charPair('c', 'c')])
+    char_ranges = _get_char_ranges(char_list)
+    if verbosity >= 2:
+        print("Character ranges:")
+        print(char_ranges)
+    
+    uranges = [['subset', ', '.join(r.get_range() for r in char_ranges)]] # name here, "subset", will be in the generated font
+    if verbosity >= 2:
+        print("Unicode ranges:")
+        print(uranges)    
 
-    def test_multiple_ranges(self):
-        self.assertEqual(_get_char_ranges(['a', 'b', 'd', 'e', 'f', 'h']), [charPair('a', 'b'), charPair('d', 'f'), charPair('h', 'h')])
+    res : dict[str, str] = {}
+    # For each font, generate a new font file using only the used characters
+    # By default, place it in the same folder as the respective font, unless fontpath is specified
+    for font in fonts:
+        assertdir = fontpath if fontpath else os.path.dirname(font)
+        t2w = TTF2Web(font, uranges, assetdir='output_temp')
+        woff2_list = t2w.generateWoff2(verbosity=verbosity)
+        print(woff2_list)
 
-class TestCharPairs(unittest.TestCase):
-    def test_get_range_with_single_char(self):
-        self.assertEqual(charPair('a', 'a').get_range(), 'U+0061')
+    # Return a dict of input font file -> output font file, eg for CSS to be updated
 
-    # Note that the second of the pair does not have the "U+" -- this caught me out
-    # with parse errors inside TTF2Web()
-    def test_get_range_with_two_chars(self):
-        self.assertEqual(charPair('a', 'b').get_range(), 'U+0061-0062')
+    # print("Characters!")
+    # print(characters)
 
-    def test_get_range_with_multiple_chars(self):
-        self.assertEqual(charPair('a', 'd').get_range(), 'U+0061-0064')
+def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontpath : str = "", verbose : bool = False) -> dict[str, str]:
+    text = ""
+    for t in texts:
+        text = text + t
+    return optimise_fonts(text, fonts, fontpath, verbose)
+
+def optimise_fonts_for_html(html_contents : list[str], fonts : list[str], fontpath : str = "", verbose : bool = False) -> dict[str, str]:
+    text = ""
+    for html in html_contents:
+        soup = BeautifulSoup(html, 'html.parser')
+        text = text + soup.get_text()
+    return optimise_fonts(text, fonts, fontpath, verbose)
 
 
 if __name__ == '__main__':
-    unittest.main()
+    optimise_fonts("Hello world",
+                   ['fonts/text/EB_Garamond/EBGaramond-VariableFont_wght.ttf', 'fonts/text/EB_Garamond/EBGaramond-Italic-VariableFont_wght.ttf'],
+                   fontpath='output_temp',
+                   verbose=True)
+
+    
+    # unittest.main()
 
     # print("Example usage:")
 
