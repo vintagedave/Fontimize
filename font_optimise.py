@@ -1,6 +1,6 @@
-import ttf2web
 from bs4 import BeautifulSoup
 from ttf2web import TTF2Web
+from os import path
 
     
 def _get_unicode_string(char : chr, withU : bool = True) -> str:
@@ -38,12 +38,13 @@ class charPair:
         if self.first == self.second:
             return _get_unicode_string(self.first)
         else:
-            return _get_unicode_string(self.first) + '-' + _get_unicode_string(self.second, False)
+            return _get_unicode_string(self.first) + '-' + _get_unicode_string(self.second, False) # Eg "U+0061-0071"
 
 
 # Taking a sorted list of characters, find the sequential subsets and return pairs of the start and end
 # of each sequential subset
 def _get_char_ranges(chars : list[chr]):
+    chars.sort()
     if not chars:
         return []
     res : list[charPair] = []
@@ -64,6 +65,16 @@ def _get_char_ranges(chars : list[chr]):
 
     return res
 
+# Get the total size of multiple files (used for calculating font file sizes)
+def _get_file_size_sum(files: list[str]) -> str:
+    sum = 0
+    for f in files:
+        sum = sum + path.getsize(f)
+    return sum
+    
+# Convert to human-readable size in MB or KB
+def _file_size_to_readable(size : int) -> str:
+    return str(round(size / 1024)) + "KB" if size < 1024 * 1024 else str(round(size / (1024 * 1024), 1)) + "MB" # nKB or n.nMB
 
 # Takes the input text, and the fonts, and generates new font files
 # Other methods (eg taking HTML files, or multiple pieces of text) all end up here
@@ -73,31 +84,46 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", verbose :
     characters = get_used_characters_in_str(text)
 
     char_list = list(characters)
-    char_list.sort()
     if verbosity >= 2:
         print("Characters:")
-        print(char_list)
+        print("  " + str(char_list))
 
     char_ranges = _get_char_ranges(char_list)
     if verbosity >= 2:
         print("Character ranges:")
-        print(char_ranges)
+        print("  " + str(char_ranges))
     
-    uranges = [['subset', ', '.join(r.get_range() for r in char_ranges)]] # name here, "subset", will be in the generated font
+    uranges = [['FontimizeSubset', ', '.join(r.get_range() for r in char_ranges)]] # name here will be in the generated font
     if verbosity >= 2:
         print("Unicode ranges:")
-        print(uranges)    
+        print("  " + str(uranges))    
 
     res : dict[str, str] = {}
     # For each font, generate a new font file using only the used characters
     # By default, place it in the same folder as the respective font, unless fontpath is specified
     for font in fonts:
-        assertdir = fontpath if fontpath else os.path.dirname(font)
+        assertdir = fontpath if fontpath else path.dirname(font)
         t2w = TTF2Web(font, uranges, assetdir='output_temp')
         woff2_list = t2w.generateWoff2(verbosity=verbosity)
         # print(woff2_list)
         assert len(woff2_list) == 1 # We only expect one font file to be generated
+        assert len(woff2_list[0]) == 2 # Pair of font, plus ranges -- we only care about [0], the font
         res[font] = woff2_list[0][0]
+
+    if verbosity >= 2:
+        print("Generated the following fonts from the originals:")
+        for k in res.keys():
+            print("  " + k + " -> " + res[k])
+
+    if verbosity >= 2:
+        print("Results:")
+        print("  Fonts processed: " + str(len(res)))
+        sum_orig =  _get_file_size_sum(list(res.keys()))
+        sum_new = _get_file_size_sum(list(res.values())) 
+        print("  Total original font size: " + _file_size_to_readable(sum_orig))
+        print("  Total optimised font size: " + _file_size_to_readable(sum_new))
+        print("  Savings: " +  _file_size_to_readable(sum_orig - sum_new))
+        print("Done. Thankyou for using Fontimize!") # A play on Font and Optimise, haha, so good pun clever. But seriously - hopefully a memorable name!
 
     # Return a dict of input font file -> output font file, eg for CSS to be updated
     return res
@@ -109,22 +135,23 @@ def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontp
         text = text + t
     return optimise_fonts(text, fonts, fontpath, verbose)
 
-def optimise_fonts_for_html(html_contents : list[str], fonts : list[str], fontpath : str = "", verbose : bool = False) -> dict[str, str]:
+def optimise_fonts_for_html_contents(html_contents : list[str], fonts : list[str], fontpath : str = "", verbose : bool = False) -> dict[str, str]:
     text = ""
     for html in html_contents:
         soup = BeautifulSoup(html, 'html.parser')
         text = text + soup.get_text()
     return optimise_fonts(text, fonts, fontpath, verbose)
 
+def optimise_fonts_for_html_files(html_files : list[str], fonts : list[str], fontpath : str = "", verbose : bool = False, rewriteCSS : bool = False) -> dict[str, str]:
+    pass
 
 if __name__ == '__main__':
     generated = optimise_fonts("Hello world",
                                ['fonts/text/EB_Garamond/EBGaramond-VariableFont_wght.ttf', 'fonts/text/EB_Garamond/EBGaramond-Italic-VariableFont_wght.ttf'],
-                               fontpath='output_temp',
+                               fontpath='',
                                verbose=True)
-    print("Generated:")
-    print(generated)
 
+    #assert False
     
     # unittest.main()
 
