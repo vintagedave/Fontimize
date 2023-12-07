@@ -78,7 +78,7 @@ def _file_size_to_readable(size : int) -> str:
 
 # Takes the input text, and the fonts, and generates new font files
 # Other methods (eg taking HTML files, or multiple pieces of text) all end up here
-def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False) -> dict[str, str]:
+def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, str]:
     verbosity = 2 if verbose else 0 # tt2web has 0, 1, 2, so match that to off and on
 
     characters = get_used_characters_in_str(text)
@@ -115,7 +115,7 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
         for k in res.keys():
             print("  " + k + " -> " + res[k])
 
-    if verbosity >= 2:
+    if (verbosity >= 2) or print_stats:
         print("Results:")
         print("  Fonts processed: " + str(len(res)))
         sum_orig =  _get_file_size_sum(list(res.keys()))
@@ -131,20 +131,20 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
     return res
 
 # Takes a list of strings, and otherwise does the same as optimise_fonts
-def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False) -> dict[str, str]:
+def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, str]:
     text = ""
     for t in texts:
         text = text + t
-    return optimise_fonts(text, fonts, fontpath, verbose)
+    return optimise_fonts(text, fonts, fontpath, verbose=verbose, print_stats=print_stats)
 
 # Takes a list of HTML strings, and parses those to get the used text (ie ignoring HTML tags);
 # then uses that to do the same as optimise_fonts
-def optimise_fonts_for_html_contents(html_contents : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False) -> dict[str, str]:
+def optimise_fonts_for_html_contents(html_contents : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, str]:
     text = ""
     for html in html_contents:
         soup = BeautifulSoup(html, 'html.parser')
         text = text + soup.get_text()
-    return optimise_fonts(text, fonts, fontpath, verbose)
+    return optimise_fonts(text, fonts, fontpath, verbose=verbose, print_stats=print_stats)
 
 def _find_font_face_urls(css_contents : str) -> list[str]:
     parsed_css = tinycss2.parse_stylesheet(css_contents)
@@ -177,11 +177,27 @@ def _get_path(known_file_path : str, relative_path : str) -> str:
 
     return full_path
 
+def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
+    parsed_css = tinycss2.parse_stylesheet(css_contents, skip_whitespace=True)
+
+    contents = []
+
+    for rule in parsed_css:
+        if rule.type == 'qualified-rule':
+            prelude = tinycss2.serialize(rule.prelude)
+            if ':before' in prelude or ':after' in prelude: # this is something like cite:before, for example
+                declarations = tinycss2.parse_declaration_list(rule.content)
+                for declaration in declarations:
+                    if declaration.type == 'declaration' and declaration.lower_name == 'content':
+                        content_value = ''.join(token.value for token in declaration.value if token.type == 'string')
+                        contents.append(content_value)
+    return contents
+
 # Takes a list of HTML files on disk
 # First, collect all strings from those files.
 # Then, also parse to get all the CSS files they use. From those CSS files, collect all the fonts they use in @font-face src,
 # plus look for any additional characters that will be reflected in rendered webpage output, such as :before and :after pseudo-elements.
-def optimise_fonts_for_html_files(html_files : list[str], subsetname = "FontimizeSubset", verbose : bool = False, rewriteCSS : bool = False) -> dict[str, str]:
+def optimise_fonts_for_html_files(html_files : list[str], font_output_dir="", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, list[str]]:
     text = ""
     css_files : set[str] = set()
     font_files : set[str] = set()
@@ -206,9 +222,13 @@ def optimise_fonts_for_html_files(html_files : list[str], subsetname = "Fontimiz
         with open(css_file, 'r') as file:
             css = file.read()
 
+        # Extract the contents of all :before and :after CSS pseudo-elements; add these to the text
+        pseudo_elements = _extract_pseudo_elements_content(css)
+        for pe in pseudo_elements:
+            text += pe
+
         # List of all fonts from @font-face src url: statements. This assumes they're all local files
         font_urls = _find_font_face_urls(css)
-
         for font_url in font_urls:
             # Only handle local files -- this does not support remote files
             adjusted_font_path = _get_path(adjusted_css_path, font_url) # Relative to the CSS file
@@ -218,12 +238,23 @@ def optimise_fonts_for_html_files(html_files : list[str], subsetname = "Fontimiz
                 # if verbose:
                 print("Font file not found (may be remote not local?); skipping: " + font_url + " (resolved to " + adjusted_font_path + ")")
 
-    print("Found the following CSS files:")
-    print(css_files)
+    if verbose:
+        print("Found the following CSS files:")
+        print(css_files)
 
-    print("Found the following fonts:")
-    print(font_files)
-    #return optimise_fonts(text, fonts, fontpath, verbose)
+        print("Found the following fonts:")
+        print(font_files)
+
+    # print("Found the following text:")
+    # print(text)
+    
+    replacement_fonts = optimise_fonts(text, font_files, fontpath=font_output_dir, verbose=verbose, print_stats=print_stats)
+    res = {
+        "css" : css_files,
+        "fonts" : replacement_fonts 
+    }
+    return res;
+
 
 # Note that unit tests for this file are in tests.py; run that file to run the tests
 if __name__ == '__main__':
@@ -233,7 +264,7 @@ if __name__ == '__main__':
     #                            verbose=True)
 
 
-    generated = optimise_fonts_for_html_files(['tests/test1-index-css.html', 'tests/test2.html'], [], verbose=True)
+    generated = optimise_fonts_for_html_files(['tests/test1-index-css.html', 'tests/test2.html'], font_output_dir = "tests/output", verbose=True)
 
     # print("Not intended to be run; import this library")
     # assert False
