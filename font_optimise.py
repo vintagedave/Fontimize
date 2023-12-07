@@ -1,3 +1,18 @@
+# Fontimize
+# A library to optimise font files for web use, by only including the characters used in the text.
+# Author: David Millington, github.com/vintagedave
+# License: GPLv3
+#
+# Wraps TTF2Web, which converts font files from TTF to WOFF2 allowing Unicode ranges to be specified.
+# Allows fonts to be converted and subbsetted for text, including passing a set of HTML files and
+# automatically using the characters in the HTML, plus user-visible characters in CSS files used 
+# by those HTML files (such as :before and :after pseudo-elements), and then converting / subsetting
+# the fonts specified by those CSS files.
+# 
+# Originally written as part of a private static site generator. Fontimizer is run as the final step
+# of the build process, to optimise the fonts used by the site. It's now been extracted into a  
+# separate library, and is available on GitHub at github.com/vintagedave/fontimize
+
 from bs4 import BeautifulSoup
 from ttf2web import TTF2Web
 from os import path
