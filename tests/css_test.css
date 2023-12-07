@@ -1,0 +1,64 @@
+/*
+
+########  #######  ##    ## ########  ######  
+##       ##     ## ###   ##    ##    ##    ## 
+##       ##     ## ####  ##    ##    ##       
+######   ##     ## ## ## ##    ##     ######  
+##       ##     ## ##  ####    ##          ## 
+##       ##     ## ##   ###    ##    ##    ## 
+##        #######  ##    ##    ##     ######  
+
+The plain CSS test file contains fonts for normal text
+
+*/
+
+@font-face {
+    font-family: 'text';
+	src: url('EBGaramond-VariableFont_wght.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
+@font-face {
+    font-family: 'text';
+    /* In the unit tests, this file doesn't exist, so will not have a new version generated */
+	src: url('DOESNOTEXIST.ttf') format('truetype');
+	font-weight: normal;
+	font-style: italic;
+}
+
+@font-face {
+    font-family: 'dropcap';
+	src: url('Spirax-Regular.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
+body {
+    font-family: text, Garamond, Baskerville, serif;
+    background-color: RGB(255, 255, 255);
+    color: rgb(20, 20, 20);
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+/*
+
+	:before and :after pseudo-elements, to test that the glyphs used here are included in the generated font
+
+*/
+
+cite:before {
+    content: " ⸺ "; 
+}
+
+ul li:before{
+    font-size: 7pt;
+    display: inline-block;
+    content:"▸";
+    width: 0.9em;
+    margin-left: -0.9em;
+    vertical-align: calc(0.25em); /* Pushes up very slightly so visually centered against the bigger text */
+}
