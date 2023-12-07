@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 from ttf2web import TTF2Web
 from os import path
+import tinycss2
     
 def _get_unicode_string(char : chr, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
@@ -92,7 +93,7 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
         print("Character ranges:")
         print("  " + str(char_ranges))
     
-    uranges = [[subsetname, ', '.join(r.get_range() for r in char_ranges)]] # subsetname here will be in the generated font, eg 'Arial.FontimizeSubset.woff'
+    uranges = [[subsetname, ', '.join(r.get_range() for r in char_ranges)]] # subsetname here will be in the generated font, eg 'Arial.FontimizeSubset.woff2'
     if verbosity >= 2:
         print("Unicode ranges:")
         print("  " + str(uranges))    
@@ -129,13 +130,15 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
     # Return a dict of input font file -> output font file, eg for CSS to be updated
     return res
 
-
+# Takes a list of strings, and otherwise does the same as optimise_fonts
 def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False) -> dict[str, str]:
     text = ""
     for t in texts:
         text = text + t
     return optimise_fonts(text, fonts, fontpath, verbose)
 
+# Takes a list of HTML strings, and parses those to get the used text (ie ignoring HTML tags);
+# then uses that to do the same as optimise_fonts
 def optimise_fonts_for_html_contents(html_contents : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False) -> dict[str, str]:
     text = ""
     for html in html_contents:
@@ -143,15 +146,94 @@ def optimise_fonts_for_html_contents(html_contents : list[str], fonts : list[str
         text = text + soup.get_text()
     return optimise_fonts(text, fonts, fontpath, verbose)
 
-def optimise_fonts_for_html_files(html_files : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, rewriteCSS : bool = False) -> dict[str, str]:
-    pass
+def _find_font_face_urls(css_contents : str) -> list[str]:
+    parsed_css = tinycss2.parse_stylesheet(css_contents)
+
+    urls = []
+
+    for rule in parsed_css:
+        if rule.type == 'at-rule' and rule.lower_at_keyword == 'font-face':
+            # Parse the @font-face rule, find all src declaractions, parse them
+            font_face_rules = tinycss2.parse_declaration_list(rule.content)
+            for declaration in font_face_rules:
+                if declaration.type == 'declaration' and declaration.lower_name == 'src':
+                    # Manually parse the declaration value to extract the URL
+                    for token in declaration.value:
+                        if token.type == 'function' and token.lower_name == 'url':
+                            urls.append(token.arguments[0].value)
+                        else:
+                            continue;
+                    # This is instead of:
+                    # src_tokens = tinycss2.parse_component_value_list(declaration.value)
+                    # which generates an error swapping U+0000 with another value. Unknown why.
+
+    return urls
+
+def _get_path(known_file_path : str, relative_path : str) -> str:
+    base_dir = path.dirname(known_file_path)
+
+    # Join the base directory with the relative path
+    full_path = path.join(base_dir, relative_path)
+
+    return full_path
+
+# Takes a list of HTML files on disk
+# First, collect all strings from those files.
+# Then, also parse to get all the CSS files they use. From those CSS files, collect all the fonts they use in @font-face src,
+# plus look for any additional characters that will be reflected in rendered webpage output, such as :before and :after pseudo-elements.
+def optimise_fonts_for_html_files(html_files : list[str], subsetname = "FontimizeSubset", verbose : bool = False, rewriteCSS : bool = False) -> dict[str, str]:
+    text = ""
+    css_files : set[str] = set()
+    font_files : set[str] = set()
+
+    for html_file in html_files:
+        with open(html_file, 'r') as file:
+            html = file.read()
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Extract used text
+            text += soup.get_text()
+
+            # Extract CSS files the HTML references
+            for link in soup.find_all('link', href=True):
+                if 'css' in link['href']:
+                    css_ref = link['href']
+                    adjusted_css_path = _get_path(html_file, css_ref) # It'll be relative, so relative to the HTML file
+                    css_files.add(adjusted_css_path)
+
+    # Extract fonts from CSS files
+    for css_file in css_files:
+        with open(css_file, 'r') as file:
+            css = file.read()
+
+        # List of all fonts from @font-face src url: statements. This assumes they're all local files
+        font_urls = _find_font_face_urls(css)
+
+        for font_url in font_urls:
+            # Only handle local files -- this does not support remote files
+            adjusted_font_path = _get_path(adjusted_css_path, font_url) # Relative to the CSS file
+            if path.isfile(adjusted_font_path):
+                font_files.add(adjusted_font_path)
+            else:
+                # if verbose:
+                print("Font file not found (may be remote not local?); skipping: " + font_url + " (resolved to " + adjusted_font_path + ")")
+
+    print("Found the following CSS files:")
+    print(css_files)
+
+    print("Found the following fonts:")
+    print(font_files)
+    #return optimise_fonts(text, fonts, fontpath, verbose)
 
 # Note that unit tests for this file are in tests.py; run that file to run the tests
 if __name__ == '__main__':
-    generated = optimise_fonts("Hello world",
-                               ['fonts/text/EB_Garamond/EBGaramond-VariableFont_wght.ttf', 'fonts/text/EB_Garamond/EBGaramond-Italic-VariableFont_wght.ttf'],
-                               fontpath='',
-                               verbose=True)
+    # generated = optimise_fonts("Hello world",
+    #                            ['fonts/text/EB_Garamond/EBGaramond-VariableFont_wght.ttf', 'fonts/text/EB_Garamond/EBGaramond-Italic-VariableFont_wght.ttf'],
+    #                            fontpath='',
+    #                            verbose=True)
+
+
+    generated = optimise_fonts_for_html_files(['tests/test1-index-css.html', 'tests/test2.html'], [], verbose=True)
 
     # print("Not intended to be run; import this library")
     # assert False
