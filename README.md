@@ -58,7 +58,9 @@ print(replacement_fonts_dict)
 
 ### Full reference
 
-#### optimise_fonts_for_html_files()
+#### `optimise_fonts_for_html_files()`
+
+This is likely the method you want to use.
 
 Optimises / subsets fonts based on a set of input HTML files on disk, and the external CSS files that those HTML files reference. Returns the list of found CSS files and a map of the old to new optimised font files.
 
@@ -75,7 +77,7 @@ Returns:
 * `return_value["css"]` -> list of unique CSS files that the HTML files use
 * `return_value["fonts"]` -> a `dict` where `keys()` are the original font files, and the value for each key is the replacement font file that was generated. You can use this to update references to the original font files. Note that Fontimizer does not rewrite the input CSS.
 
-### def optimise_fonts_for_html_contents()
+### `optimise_fonts_for_html_contents()`
 
 Similar to `optimise_fonts_for_html_files`, except the input is HTML as a string (eg `<head>...</head><body>...<body>`). It does not parse to find the CSS files used (and thus fonts used), so you need to also give it a list of font files to optimize.
 
@@ -88,7 +90,7 @@ Other parameters (`fontpath`, `subsetname`, `verbose`, `print_stats`) are identi
 Returns:
 * a `dict` where `keys()` are the original font files, and the value for each key is the replacement font file that was generated
 
-### optimise_fonts_for_multiple_text()
+### `optimise_fonts_for_multiple_text()`
 
 Similar to `optimise_fonts_for_html_contents`, except the input is a list of Python strings. The contents of those strings are used to generate the glyphs for the optimised fonts.
 
@@ -99,14 +101,14 @@ Parameters:
 
 Other parameters (`fonts`, `fontpath`, `subsetname`, `verbose`, `print_stats`) and the return value are idential to `optimise_fonts_for_html_contents`.
 
-### optimise_fonts()
+### `optimise_fonts()`
 
 This is the main method; all the methods above end up here. It takes a Python Unicode string of text and a list of paths to font files to optimise, and using the input text it creates font subsets containing only the unique glyphs required for the input text.
 
 Parameters:
 * `text: str`: a Python Unicode string. A set of unique Unicode characters is generated from this, and the output font files will contain all glyphs required to render this string correctly (assuming the fonts contained the glyphs to begin with.) 
 
-Other parameters (`fonts`, `fontpath`, `subsetname`, `verbose`, `print_stats`) and the return value are idential to `optimise_fonts_for_html_contents` and `optimise_fonts_for_multiple_text`.
+Other parameters (`fonts`, `fontpath`, `subsetname`, `verbose`, `print_stats`) and the return value are identical to `optimise_fonts_for_html_contents` and `optimise_fonts_for_multiple_text`.
 
 ## Command line
 
