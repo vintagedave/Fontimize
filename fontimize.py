@@ -1,4 +1,5 @@
 # Fontimize
+# 
 # A library to optimise font files for web use, by only including the characters used in the text.
 # Author: David Millington, github.com/vintagedave
 # License: GPLv3
@@ -17,6 +18,7 @@ from bs4 import BeautifulSoup
 from ttf2web import TTF2Web
 from os import path
 import tinycss2
+import typing
     
 def _get_unicode_string(char : chr, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
@@ -212,7 +214,7 @@ def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
 # First, collect all strings from those files.
 # Then, also parse to get all the CSS files they use. From those CSS files, collect all the fonts they use in @font-face src,
 # plus look for any additional characters that will be reflected in rendered webpage output, such as :before and :after pseudo-elements.
-def optimise_fonts_for_html_files(html_files : list[str], font_output_dir="", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, list[str]]:
+def optimise_fonts_for_html_files(html_files : list[str], font_output_dir = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, typing.Any]:
     text = ""
     css_files : set[str] = set()
     font_files : set[str] = set()
