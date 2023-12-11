@@ -20,7 +20,7 @@ After running Fontimize, the total size for *all fonts combined* is 76KB.
 
 Fontimize is a Python library, and can be included in your Python software or used stand-alone on the command line. I myself use it as part of a custom static site generator to build my site: it runs as the final step, optimizing fonts based on the generated on-disk HTML files, and I use the return values (what fonts it created, and what CSS files it analysed) to rewrite the CSS to point at the new fonts.
 
-(Rewriting CSS is not currently a feature provided by Fontimizer; please [create an issue](https://github.com/vintagedave/Fontimize/issues) or pull request if you'd like it to be. At the current time, the library will generate new files (new fonts) and return a map (dict or text output) of the old to new fonts, ie what to replace, but will not rewrite existing files. This is for safety be design: if you want to modify input or what's already on disk, you need to do it explicitly.)
+(Rewriting CSS is not currently a feature provided by Fontimizer; please [create an issue](https://github.com/vintagedave/Fontimize/issues) or pull request if you'd like it to be. At the current time, the library will generate new files (new fonts) and return a map (dict or text output) of the old to new fonts, ie what to replace, but will not rewrite existing files. This is for safety by design: if you want to modify input or what's already on disk, you need to do it explicitly.)
 
 ## Library
 
