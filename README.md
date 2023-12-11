@@ -34,13 +34,13 @@ $ python3 -m pip install fontimize
 
 In your script:
 
-```
+```python
 import fontimize
 ```
 
 To parse a set of HTML files on disk, and the CSS files they use, and export new fonts (by default in the same folder as the original fonts) containing only the glyphs used in the HTML: 
 
-```
+```python
 all_html_files = [ 'input/one.html', 'input/two.html' ]
 
 font_results = fontimize.optimise_fonts_for_html_files(all_html_files, verbose=False)
