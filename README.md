@@ -49,13 +49,14 @@ replacement_fonts_dict = font_results["fonts"]
 
 print(css_files)
 # Prints CSS files found used by any of the HTML input files:
-#   input/main.css
-#   input/secondary.css
+#  { 'input/main.css',
+#    'input/secondary.css' }
 
 print(replacement_fonts_dict)
 # Prints pairs of the old fonts to the new optimised font generated for it. Use this to, eg, rewrite your CSS
-#  [ 'input/fonts/Arial.ttf', 'input/fonts/Arial.FontimizeSubset.woff2' ]
-#  [ 'input/fonts/EB Garamond.ttf', 'input/fonts/EB Garamond.FontimizeSubset.woff2' ]
+# By default exports to the same folder as the input files; use `font_output_dir` to change
+#  { 'input/fonts/Arial.ttf': 'input/fonts/Arial.FontimizeSubset.woff2',
+#    'input/fonts/EB Garamond.ttf': 'input/fonts/EB Garamond.FontimizeSubset.woff2' }
 ```
 
 ### Full reference
@@ -69,7 +70,7 @@ Optimises / subsets fonts based on a set of input HTML files on disk, and (autom
 Parameters:
 
 * `html_files : list[str]`: list of paths, each of which is a HTML file. Each one will be analyzed.
-* `font_output_dir = ""`: path to where the subsetted fonts should be placed. By default this is empty (`""`), which means to generate the new fonts in the same location as the input fonts. Because the new fonts have a different name (see `subsetname`, the next parameter) you will not overwrite the input fonts. There is **no checking if subset fonts already exist** before they are written, though.
+* `font_output_dir = ""`: path to where the subsetted fonts should be placed. By default this is empty (`""`), which means to generate the new fonts in the same location as the input fonts. Because the new fonts have a different name (see `subsetname`, the next parameter) you will not overwrite the input fonts. There is **no checking if subset fonts already exist** before they are written.
 * `subsetname = "FontimizeSubset"`: The optimised fonts are renamed in the format `OriginalName.FontimizeSubset.woff2`. It's important to differentiate the subsetted fonts from the original fonts with all glyphs. You can change the output subset name to any other string that's valid on your file system.
 * `verbose : bool = False`: If `True`, emits diagnostic information about the CSS files, fonts, etc that it's found and is generating. 
 * `print_stats : bool = True`: prints information for the total size on disk of the input fonts, and the total size of the optimized fonts, and the savings in percent. Set this to `False` if you want it to run silently.
