@@ -14,13 +14,13 @@ This library was originally created for my [personal website](https://daveon.des
 
 After running Fontimize, the total size for *all fonts combined* is 76KB.
 
-1.5MB down to 76KB is a saving of 95.2%! This had noticeable impact on the initial time to download a page on the site, plus immense impact on the rendering: before, the site would render with generic serif fonts, and then re-render a few seconds later once the fonts had downloaded, which looked really bad. Now, you will get the new fonts immediately or before you notice and the site will look correct from the start.
+1.5MB down to 76KB is a saving of 95.2%! This had noticeable impact on the initial time to download a page on the site, plus immense impact on the rendering: before, the initial load of the site would render with generic serif fonts, and then re-render a few seconds later once the fonts had downloaded, which looked really bad. Now, you will get the new fonts immediately or before you notice and the site will look correct from the start.
 
 # Usage
 
 Fontimize is a Python library, and can be included in your Python software or used stand-alone on the command line. I myself use it as part of a custom static site generator to build my site: it runs as the final step, optimizing fonts based on the generated on-disk HTML files, and I use the return values (what fonts it created, and what CSS files it analysed) to rewrite the CSS to point at the new fonts.
 
-(Rewriting CSS is not currently a feature provided by Fontimizer; please [create an issue](https://github.com/vintagedave/Fontimize/issues) or pull request if you'd like it to be. At the current time, the library will generate new files (new fonts) and return a map (dict or text output) of the old to new fonts, ie what to replace, but will not rewrite existing files.)
+(Rewriting CSS is not currently a feature provided by Fontimizer; please [create an issue](https://github.com/vintagedave/Fontimize/issues) or pull request if you'd like it to be. At the current time, the library will generate new files (new fonts) and return a map (dict or text output) of the old to new fonts, ie what to replace, but will not rewrite existing files. This is for safety be design: if you want to modify input or what's already on disk, you need to do it explicitly.)
 
 ## Library
 
@@ -62,7 +62,7 @@ print(replacement_fonts_dict)
 
 This is likely the method you want to use.
 
-Optimises / subsets fonts based on a set of input HTML files on disk, and the external CSS files that those HTML files reference. Returns the list of found CSS files and a map of the old to new optimised font files.
+Optimises / subsets fonts based on a set of input HTML files on disk, and (automatically) the external CSS files that those HTML files reference. Returns the list of found CSS files and a map of the old to new optimised font files.
 
 Parameters:
 
