@@ -1,5 +1,5 @@
 import unittest
-from font_optimise import get_used_characters_in_html, charPair, _get_char_ranges, optimise_fonts
+from fontimize import get_used_characters_in_html, charPair, _get_char_ranges, optimise_fonts
 from fontTools.ttLib import TTFont
 
 class TestGetUsedCharactersInHtml(unittest.TestCase):
