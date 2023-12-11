@@ -21,6 +21,7 @@ from ttf2web import TTF2Web
 from os import path
 import tinycss2
 import typing
+import pathlib
     
 def _get_unicode_string(char : chr, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
@@ -212,29 +213,43 @@ def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
                         contents.append(content_value)
     return contents
 
-# Takes a list of HTML files on disk
+# Takes a list of files on disk
+# HTML files are parsed; all others are treated as text
 # First, collect all strings from those files.
 # Then, also parse to get all the CSS files they use. From those CSS files, collect all the fonts they use in @font-face src,
 # plus look for any additional characters that will be reflected in rendered webpage output, such as :before and :after pseudo-elements.
-def optimise_fonts_for_html_files(html_files : list[str], font_output_dir = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, typing.Any]:
+def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True, fonts : list[str] = []) -> dict[str, typing.Any]:
+    if len(files) == 0:
+        print("Error: No input files. Exiting.")
+        res = {
+            "css" : [],
+            "fonts" : [] 
+        }
+    
     text = ""
     css_files : set[str] = set()
     font_files : set[str] = set()
+    for f in fonts: # user-specified input font files
+        font_files.add(f)
 
-    for html_file in html_files:
-        with open(html_file, 'r') as file:
-            html = file.read()
-            soup = BeautifulSoup(html, 'html.parser')
+    for f in files:
+        file_ext = pathlib.Path(f).stem.lower()
+        with open(f, 'r') as file:
+            if file_ext == '.html' or file_ext == '.htm':
+                html = file.read()
+                soup = BeautifulSoup(html, 'html.parser')
 
-            # Extract used text
-            text += soup.get_text()
+                # Extract used text
+                text += soup.get_text()
 
-            # Extract CSS files the HTML references
-            for link in soup.find_all('link', href=True):
-                if 'css' in link['href']:
-                    css_ref = link['href']
-                    adjusted_css_path = _get_path(html_file, css_ref) # It'll be relative, so relative to the HTML file
-                    css_files.add(adjusted_css_path)
+                # Extract CSS files the HTML references
+                for link in soup.find_all('link', href=True):
+                    if 'css' in link['href']:
+                        css_ref = link['href']
+                        adjusted_css_path = _get_path(f, css_ref) # It'll be relative, so relative to the HTML file
+                        css_files.add(adjusted_css_path)
+            else: # not HTML, treat as text
+                text += file.read()
 
     # Extract fonts from CSS files
     for css_file in css_files:
@@ -255,7 +270,7 @@ def optimise_fonts_for_html_files(html_files : list[str], font_output_dir = "", 
                 font_files.add(adjusted_font_path)
             else:
                 # if verbose:
-                print("Font file not found (may be remote not local?); skipping: " + font_url + " (resolved to " + adjusted_font_path + ")")
+                print("Warning: Font file not found (may be remote not local?); skipping: " + font_url + " (resolved to " + adjusted_font_path + ")")
 
     if verbose:
         print("Found the following CSS files:")
@@ -267,6 +282,14 @@ def optimise_fonts_for_html_files(html_files : list[str], font_output_dir = "", 
     # print("Found the following text:")
     # print(text)
     
+    if len(font_files) == 0:
+        print("Error: No fonts found in the input files. Exiting.")
+        res = {
+            "css" : css_files,
+            "fonts" : [] 
+        }
+        return res
+
     replacement_fonts = optimise_fonts(text, font_files, fontpath=font_output_dir, verbose=verbose, print_stats=print_stats)
     res = {
         "css" : css_files,
@@ -289,6 +312,7 @@ Examples:
     
     parser.add_argument('inputfiles', default=[], help='Input files to parse: .htm and .html are parsed as HTML to extract used text, all other files are treated as text')
     parser.add_argument('-t', '--text', type=str, help='Input text to parse, specified directly on the command line')
+    parser.add_argument('-f', '--fonts', type=str, help='Input font files')
 
     group_output = parser.add_argument_group('Output', 'Specify font output directory and font subset phrase in the generated filenames')
     group_output.add_argument("-o", "--outputdir", type=str, 

@@ -43,7 +43,7 @@ To parse a set of HTML files on disk, and the CSS files they use, and export new
 ```python
 all_html_files = [ 'input/one.html', 'input/two.html' ]
 
-font_results = fontimize.optimise_fonts_for_html_files(all_html_files, verbose=False)
+font_results = fontimize.optimise_fonts_for_files(all_html_files, verbose=False)
 css_files = font_results["css"]
 replacement_fonts_dict = font_results["fonts"]
 
@@ -61,11 +61,11 @@ print(replacement_fonts_dict)
 
 ### Full reference
 
-#### `optimise_fonts_for_html_files()`
+#### `optimise_fonts_for_files()`
 
 This is likely the method you want to use.
 
-Optimises / subsets fonts based on a set of input HTML files on disk, and (automatically) the external CSS files that those HTML files reference. Returns the list of found CSS files and a map of the old to new optimised font files.
+Optimises / subsets fonts based on a set of input files on disk, and (automatically) the external CSS files that any HTML files reference. Files are parsed as HTML if they have a `.htm` or `.html` file extension (user-visible text is extracted and CSS is parsed), otherwise files are treated as text. Returns the list of found CSS files and a map of the old to new optimised font files.
 
 Parameters:
 
@@ -74,6 +74,7 @@ Parameters:
 * `subsetname = "FontimizeSubset"`: The optimised fonts are renamed in the format `OriginalName.FontimizeSubset.woff2`. It's important to differentiate the subsetted fonts from the original fonts with all glyphs. You can change the output subset name to any other string that's valid on your file system.
 * `verbose : bool = False`: If `True`, emits diagnostic information about the CSS files, fonts, etc that it's found and is generating. 
 * `print_stats : bool = True`: prints information for the total size on disk of the input fonts, and the total size of the optimized fonts, and the savings in percent. Set this to `False` if you want it to run silently.
+*  `fonts : list[str] = []`: a list of paths to font files. These are added to any fonts the method finds via CSS. You'd usually specify this if you're passing in text files rather than HTML
 
 Returns:
 * `dict[str, typing.Any]`
