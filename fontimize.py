@@ -1,3 +1,5 @@
+#!/bin/env python3
+
 # Fontimize
 # 
 # A library to optimise font files for web use, by only including the characters used in the text.
@@ -275,51 +277,33 @@ def optimise_fonts_for_html_files(html_files : list[str], font_output_dir = "", 
 
 # Note that unit tests for this file are in tests.py; run that file to run the tests
 if __name__ == '__main__':
-    # generated = optimise_fonts("Hello world",
-    #                            ['fonts/text/EB_Garamond/EBGaramond-VariableFont_wght.ttf', 'fonts/text/EB_Garamond/EBGaramond-Italic-VariableFont_wght.ttf'],
-    #                            fontpath='',
-    #                            verbose=True)
-
-
-    generated = optimise_fonts_for_html_files(['tests/test1-index-css.html', 'tests/test2.html'], font_output_dir = "tests/output", verbose=True)
-
-    # print("Not intended to be run; import this library")
-    # assert False
+    import argparse
+    parser = argparse.ArgumentParser(description="Optimize fonts to only the specific glyphs needed for your text or HTML files",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    fontimize.py 1.html 2.txt
+    fontimize.py --text "The fonts will contain only the glyphs in this string"
+    fontimize.py --outputdir output --subsetname MySubset --verbose 1.html 2.txt
+                """)
     
-    # print("Example usage:")
+    parser.add_argument('inputfiles', default=[], help='Input files to parse: .htm and .html are parsed as HTML to extract used text, all other files are treated as text')
+    parser.add_argument('-t', '--text', type=str, help='Input text to parse, specified directly on the command line')
 
-    # characters : set[chr] = get_used_characters_in_str("Helloworld")
-    # characters = characters.union(get_used_characters_in_str("abcdefABCDEF.Z?<>,...+="))
+    group_output = parser.add_argument_group('Output', 'Specify font output directory and font subset phrase in the generated filenames')
+    group_output.add_argument("-o", "--outputdir", type=str, 
+                        help="Directory in which to place the generated font files (default is the same directory as the original font files)",
+                        default="")
+    group_output.add_argument("-s", "--subsetname", type=str, 
+                        help="Phrase used in the output font filenames, eg 'Arial.SubsetName.woff2'",
+                        default="FontimizeSubset")
+    
+    group_verb = parser.add_argument_group('Verbosity', 'Control how much Fontimize prints to the console')
+    group_verb.add_argument("-v", "--verbose", help="Output significant / diagnostic info about discovered files and fonts, and generated fonts and their glyphs",
+                    action="store_true")
+    group_verb.add_argument("-n", "--nostats", help="Do not output info about the sizes of the original and generated fonts and the amount of space saved (shown by default)",
+                    action="store_true")
 
-    # char_list = list(characters)
-    # char_list.sort()
-
-    # char_ranges = _get_char_ranges(char_list)
-
-    # print("Characters!")
-    # print(char_list)
-
-    # print("")
-    # print("Ranges!")
-    # print(char_ranges)
-
-    # for r in char_ranges:
-    #     print(r.get_range())
-
-    # print("uranges")
-    # uranges = [['subset', ', '.join(r.get_range() for r in char_ranges)]] # name here, "subset", will be in the generated font
-    # print(uranges)
-
-    # verbose = 2
-    # fonts : list[str] = ['fonts/text/EB_Garamond/EBGaramond-VariableFont_wght.ttf', 'fonts/text/EB_Garamond/EBGaramond-Italic-VariableFont_wght.ttf']
-    # for fontfile in fonts:
-    #     verbosity = 2 if verbose else 1
-
-    #     t2w = TTF2Web(fontfile, uranges, assetdir='output_temp')
-    #     woff2_list = t2w.generateWoff2(verbosity=verbosity)
-    #     #t2w.generateCss(woff2_list, verbosity=verbosity)
-
-
-
+    args = parser.parse_args()
 
 
