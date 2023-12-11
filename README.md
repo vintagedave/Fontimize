@@ -6,6 +6,8 @@ Are you worried about the initial download size of your website? Requiring megab
 
 In practice you can shrink your font download size to 10% or less of the original.
 
+[!Screenshot of input fonts and the resulting optimized fonts, demonstrating greatly reduced file size](/images/fontimize-example.webp)
+
 Fontimize uses [TTF2Web](https://github.com/johncf/ttf2web), and many thanks and credit to the author of that fantastic library.
 
 ## Example Results
