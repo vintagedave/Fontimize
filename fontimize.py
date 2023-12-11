@@ -96,7 +96,7 @@ def _file_size_to_readable(size : int) -> str:
 # Takes the input text, and the fonts, and generates new font files
 # Other methods (eg taking HTML files, or multiple pieces of text) all end up here
 def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, str]:
-    verbosity = 2 if verbose else 0 # tt2web has 0, 1, 2, so match that to off and on
+    verbosity = 2 if verbose else 0 # ttf2web has 0, 1, 2, so match that to off and on
 
     characters = get_used_characters_in_str(text)
 
