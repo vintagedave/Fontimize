@@ -92,7 +92,7 @@ Returns:
 
 ### `optimise_fonts_for_multiple_text()`
 
-Similar to `optimise_fonts_for_html_contents`, except the input is a list of Python strings. The contents of those strings are used to generate the glyphs for the optimised fonts.
+Similar to `optimise_fonts_for_html_contents`, except the input is a list of Python strings. The contents of those strings are used to generate the glyphs for the optimised fonts: there will be a glyph for every unique character in the input strings (if the input fonts contain the required glyphs.)
 
 Pass in a list of font files (`fonts` parameter) as the input font files to optimise based on the text.
 
@@ -103,7 +103,7 @@ Other parameters (`fonts`, `fontpath`, `subsetname`, `verbose`, `print_stats`) a
 
 ### `optimise_fonts()`
 
-This is the main method; all the methods above end up here. It takes a Python Unicode string of text and a list of paths to font files to optimise, and using the input text it creates font subsets containing only the unique glyphs required for the input text.
+This is the main method; all the methods above end up here. It takes a Python Unicode string of text and a list of paths to font files to optimise, and creates font subsets containing only the unique glyphs required for the input text.
 
 Parameters:
 * `text: str`: a Python Unicode string. A set of unique Unicode characters is generated from this, and the output font files will contain all glyphs required to render this string correctly (assuming the fonts contained the glyphs to begin with.) 
