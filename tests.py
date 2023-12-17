@@ -143,11 +143,13 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
 
         fonts = result['fonts']
         font_keys = fonts.keys()
-        self.assertIn('tests/EBGaramond-Italic-VariableFont_wght.ttf', font_keys) # These four found in CSS, via HTML input
+        # These five found in CSS, via HTML input
         self.assertIn('tests/EBGaramond-VariableFont_wght.ttf', font_keys)
         self.assertIn('tests/Spirax-Regular.ttf', font_keys)
         self.assertIn('tests/SortsMillGoudy-Regular.ttf', font_keys)
-        self.assertIn('tests/Whisper-Regular.ttf', font_keys) # Manually specified
+        self.assertIn('tests/SortsMillGoudy-Italic.ttf', font_keys)
+        # This one is manually specified
+        self.assertIn('tests/Whisper-Regular.ttf', font_keys) 
         self.assertEqual(len(fonts), 5)
 
         self.assertDictEqual(fonts, 
