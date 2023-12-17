@@ -152,13 +152,14 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         self.assertIn('tests/Whisper-Regular.ttf', font_keys) 
         self.assertEqual(len(fonts), 5)
 
+        self.maxDiff = None # See full results of below comparison
         self.assertDictEqual(fonts, 
                              {
-                                'tests/EBGaramond-Italic-VariableFont_wght.ttf': 'tests/output/EBGaramond-Italic-VariableFont_wght.TestFilesSubset.woff2',
-                                'tests/EBGaramond-VariableFont_wght.ttf': 'tests/output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2',
-                                'tests/Spirax-Regular.ttf': 'tests/output/Spirax-Regular.TestFilesSubset.woff2',
-                                'tests/SortsMillGoudy-Regular.ttf': 'tests/output/SortsMillGoudy-Regular.TestFilesSubset.woff2',
-                                'tests/Whisper-Regular.ttf': 'tests/output/Whisper-Regular.TestFilesSubset.woff2'
+                                'tests/Whisper-Regular.ttf': 'output/Whisper-Regular.TestFilesSubset.woff2',
+                                'tests/SortsMillGoudy-Italic.ttf': 'output/SortsMillGoudy-Italic.TestFilesSubset.woff2',
+                                'tests/SortsMillGoudy-Regular.ttf': 'output/SortsMillGoudy-Regular.TestFilesSubset.woff2',
+                                'tests/Spirax-Regular.ttf': 'output/Spirax-Regular.TestFilesSubset.woff2',
+                                'tests/EBGaramond-VariableFont_wght.ttf': 'output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'
                              }
                             )
         
