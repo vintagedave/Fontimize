@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import patch
+import sys
 from fontimize import get_used_characters_in_html, charPair, _get_char_ranges, optimise_fonts, optimise_fonts_for_files
 from fontTools.ttLib import woff2, TTFont
 
@@ -88,7 +90,7 @@ class TestOptimiseFonts(unittest.TestCase):
     def test_optimise_fonts_with_multiple_fonts(self):
         result = optimise_fonts(self.test_string,
             ['tests/Spirax-Regular.ttf', 'tests/EBGaramond-VariableFont_wght.ttf', 'tests/EBGaramond-Italic-VariableFont_wght.ttf'],
-            fontpath='tests/output')
+            fontpath='tests/output', verbose=False, print_stats=False)
         self.assertIsInstance(result, dict)
         self.assertIn('tests/Spirax-Regular.ttf', result)
         self.assertEqual(result['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
@@ -128,9 +130,15 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         self.print_stats = False
         self.fonts = ['tests/Whisper-Regular.ttf'] # Not used by any HTML/CSS, mimics manually adding a font
     
-    def test_optimise_fonts_for_files(self):
+    @patch.object(sys, 'stdout') # provides mock_stdout in order to hide and verify console output
+    def test_optimise_fonts_for_files(self, mock_stdout):
         result = optimise_fonts_for_files(files=self.files, font_output_dir=self.font_output_dir, subsetname=self.subsetname, fonts=self.fonts,
             verbose=False, print_stats=False)
+        
+        # css_test.css has:
+        #   src: url('DOESNOTEXIST.ttf') format('truetype');
+        # This will emit a warning, check it was written to standard output
+        mock_stdout.write.assert_any_call('Warning: Font file not found (may be remote not local?); skipping: DOESNOTEXIST.ttf (resolved to tests/DOESNOTEXIST.ttf)')
         
         self.assertIsInstance(result, dict)
         self.assertIn('css', result)

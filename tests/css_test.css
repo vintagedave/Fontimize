@@ -21,7 +21,7 @@ The plain CSS test file contains fonts for normal text
 
 @font-face {
     font-family: 'text';
-    /* In the unit tests, this file doesn't exist, so will not have a new version generated */
+    /* In the unit tests, this file doesn't exist, so will not have a new version generated, and will emit a warning */
 	src: url('DOESNOTEXIST.ttf') format('truetype');
 	font-weight: normal;
 	font-style: italic;
