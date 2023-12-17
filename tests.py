@@ -143,6 +143,7 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
 
         fonts = result['fonts']
         font_keys = fonts.keys()
+        self.assertEqual(len(fonts), 5)
         # These five found in CSS, via HTML input
         self.assertIn('tests/EBGaramond-VariableFont_wght.ttf', font_keys)
         self.assertIn('tests/Spirax-Regular.ttf', font_keys)
@@ -150,7 +151,6 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         self.assertIn('tests/SortsMillGoudy-Italic.ttf', font_keys)
         # This one is manually specified
         self.assertIn('tests/Whisper-Regular.ttf', font_keys) 
-        self.assertEqual(len(fonts), 5)
 
         self.maxDiff = None # See full results of below comparison
         self.assertDictEqual(fonts, 
@@ -163,8 +163,9 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
                              }
                             )
         
-        # Check some glyphs
-        self.assertEqual(2, _count_glyphs_in_font(result['tests/output/Spirax-Regular.TestFilesSubset.woff2']))
+        # Check some glyphs (+1 is ".notdef")
+        # space and '(),-.:;? (=10 with space) and 012349 (=6) and A-Z (minus BFIKLRYZ, =18) and a-z (minus jz, =24)
+        self.assertEqual(10 + 6 + 18 + 24 + 1, _count_glyphs_in_font('output/Spirax-Regular.TestFilesSubset.woff2'))
 
 if __name__ == '__main__':
     unittest.main()
