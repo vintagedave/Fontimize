@@ -233,7 +233,7 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
         font_files.add(f)
 
     for f in files:
-        file_ext = pathlib.Path(f).stem.lower()
+        file_ext = pathlib.Path(f).suffix.lower()
         with open(f, 'r') as file:
             if file_ext == '.html' or file_ext == '.htm':
                 html = file.read()
