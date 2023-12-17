@@ -290,7 +290,7 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
         }
         return res
 
-    replacement_fonts = optimise_fonts(text, font_files, fontpath=font_output_dir, verbose=verbose, print_stats=print_stats)
+    replacement_fonts = optimise_fonts(text, font_files, fontpath=font_output_dir, subsetname=subsetname, verbose=verbose, print_stats=print_stats)
     res = {
         "css" : css_files,
         "fonts" : replacement_fonts 
