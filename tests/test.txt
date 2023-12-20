@@ -1,0 +1,8 @@
+The pelagic argosy sights land.
+   ⸻ Gene Wolfe
+Above is a three-em dash, for testing it's present in the generated fonts
+
+Plus some other Unicode characters:
+Kanji (漢字) -- from Wikipedia
+Vietnamese has 12 vowels (nguyên âm) and 17 consonants (phụ âm) -- also Wikipedia
+Modern Standard Hindi (Hindi: आधुनिक मानक हिन्दी, Ādhunik Mānak Hindī) -- also Wikipedia
