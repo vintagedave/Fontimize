@@ -72,6 +72,12 @@ def _count_glyphs_in_font(fontpath):
     num_glyphs = font['maxp'].numGlyphs # Use font.getGlyphOrder() and https://fontdrop.info to examine, if weird
     return num_glyphs
 
+# Does a named glyph exist in the font?
+def _font_contains(fontpath, charname : str) -> bool:
+    font = TTFont(fontpath)
+    font.flavor = None  # Decompress the font data
+    return charname in font.getGlyphOrder()
+
 class TestOptimiseFonts(unittest.TestCase):
     # Contains unique characters, none repeated, a couple of capitals, some symbols, and 26 lowercase
     test_string = " ,.@QT_abcdefghijklmnopqrstuvwxyz"
@@ -172,8 +178,13 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
                             )
         
         # Check some glyphs (+1 is ".notdef")
-        # space and '(),-.:;? (=10 with space) and 012349 (=6) and A-Z (minus BFIKLRYZ, =18) and a-z (minus jz, =24)
-        self.assertEqual(10 + 6 + 18 + 24 + 1, _count_glyphs_in_font('output/Spirax-Regular.TestFilesSubset.woff2'))
+        # space and '(),-.:;? (=10 with space) and 0123479 (=7) and A-Z (minus BFILRYZ, =19) and a-z (minus z, =25) and acircumflex and ecircumflex = 2
+        # Note that test.txt contains Kanji, Hindi and Vietnamese. Kanji and Hindi are not in the Spirax input font, but the circumflexes come from Vietnamese support.
+        self.assertEqual(10 + 7 + 19 + 25 + 2 + 1, _count_glyphs_in_font('output/Spirax-Regular.TestFilesSubset.woff2'))
+        # EB Garamond contains many more glyphs
+        self.assertEqual(111, _count_glyphs_in_font('output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'))
+        # U+1EE5 is "u with dot below", ụ, which is in test.txt - Vietnamese
+        self.assertTrue(_font_contains('output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2', 'uni1EE5'))
 
 if __name__ == '__main__':
     unittest.main()
