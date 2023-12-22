@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest.mock import patch
 import sys
@@ -134,8 +135,9 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         self.subsetname = 'TestFilesSubset'
         self.verbose = False
         self.print_stats = False
-        self.fonts = ['tests/Whisper-Regular.ttf'] # Not used by any HTML/CSS, mimics manually adding a font
-    
+        # Not used by any HTML/CSS, mimics manually adding a font
+        self.fonts = ['tests/Whisper-Regular.ttf', 'tests/NotoSans-VariableFont_wdth,wght.ttf', 'tests/NotoSansJP-VariableFont_wght.ttf']
+
     @patch.object(sys, 'stdout') # provides mock_stdout in order to hide and verify console output
     def test_optimise_fonts_for_files(self, mock_stdout):
         result = optimise_fonts_for_files(files=self.files, font_output_dir=self.font_output_dir, subsetname=self.subsetname, fonts=self.fonts,
@@ -157,34 +159,60 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
 
         fonts = result['fonts']
         font_keys = fonts.keys()
-        self.assertEqual(len(fonts), 5)
+        self.assertEqual(len(fonts), 7)
         # These five found in CSS, via HTML input
         self.assertIn('tests/EBGaramond-VariableFont_wght.ttf', font_keys)
         self.assertIn('tests/Spirax-Regular.ttf', font_keys)
         self.assertIn('tests/SortsMillGoudy-Regular.ttf', font_keys)
         self.assertIn('tests/SortsMillGoudy-Italic.ttf', font_keys)
-        # This one is manually specified
+        # These are manually specified
         self.assertIn('tests/Whisper-Regular.ttf', font_keys) 
+        self.assertIn('tests/NotoSans-VariableFont_wdth,wght.ttf', font_keys) 
+        self.assertIn('tests/NotoSansJP-VariableFont_wght.ttf', font_keys) 
 
         self.maxDiff = None # See full results of below comparison
         self.assertDictEqual(fonts, 
                              {
-                                'tests/Whisper-Regular.ttf': 'output/Whisper-Regular.TestFilesSubset.woff2',
-                                'tests/SortsMillGoudy-Italic.ttf': 'output/SortsMillGoudy-Italic.TestFilesSubset.woff2',
-                                'tests/SortsMillGoudy-Regular.ttf': 'output/SortsMillGoudy-Regular.TestFilesSubset.woff2',
-                                'tests/Spirax-Regular.ttf': 'output/Spirax-Regular.TestFilesSubset.woff2',
-                                'tests/EBGaramond-VariableFont_wght.ttf': 'output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'
+                                 'tests/Spirax-Regular.ttf': 'output/Spirax-Regular.TestFilesSubset.woff2',
+                                 'tests/SortsMillGoudy-Italic.ttf': 'output/SortsMillGoudy-Italic.TestFilesSubset.woff2',
+                                 'tests/SortsMillGoudy-Regular.ttf': 'output/SortsMillGoudy-Regular.TestFilesSubset.woff2',
+                                 'tests/NotoSansJP-VariableFont_wght.ttf': 'output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2',
+                                 'tests/Whisper-Regular.ttf': 'output/Whisper-Regular.TestFilesSubset.woff2',
+                                 'tests/NotoSans-VariableFont_wdth,wght.ttf': 'output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2',
+                                 'tests/EBGaramond-VariableFont_wght.ttf': 'output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'
                              }
                             )
         
-        # Check some glyphs (+1 is ".notdef")
+        # Do the output fonts exist on disk?
+        for filepath in fonts.values():
+            abspath = os.path.abspath(filepath)
+            print(f"Checking {filepath} as {abspath}")
+            self.assertTrue(os.path.exists(filepath), f"Output font {filepath} does not exist")
+            self.assertTrue(os.path.exists(abspath), f"Output font {abspath} does not exist (absolute path)")
+        
+        # Check glyph counts (+1 is ".notdef", present in all fonts)
         # space and '(),-.:;? (=10 with space) and 0123479 (=7) and A-Z (minus BFILRYZ, =19) and a-z (minus z, =25) and acircumflex and ecircumflex = 2
         # Note that test.txt contains Kanji, Hindi and Vietnamese. Kanji and Hindi are not in the Spirax input font, but the circumflexes come from Vietnamese support.
         self.assertEqual(10 + 7 + 19 + 25 + 2 + 1, _count_glyphs_in_font('output/Spirax-Regular.TestFilesSubset.woff2'))
         # EB Garamond contains many more glyphs
         self.assertEqual(111, _count_glyphs_in_font('output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'))
+
+        # Check specific characters are present
         # U+1EE5 is "u with dot below", ụ, which is in test.txt - Vietnamese
         self.assertTrue(_font_contains('output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2', 'uni1EE5'))
+        # Kanji
+        self.assertTrue(_font_contains('output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2', 'uni6F22'))
+        self.assertTrue(_font_contains('output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2', 'uni5B57'))
+        # The above is the Japanese version: Noto Sans JP. The other Noto Sans font does not support Kanji
+        # so as a sanity check, verify the glyphs are not there
+        self.assertFalse(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni6F22'))
+        self.assertFalse(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni5B57'))
+        # Devangari (Hindi)
+        # Supported by Noto Sans
+        self.assertTrue(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0906')) # char 1 in text.txt
+        self.assertTrue(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0927')) # char 2 (part) in text.txt
+        self.assertTrue(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0941')) # char 2 (part) in text.txt
+        # Could check that glyphs (in general) are _not_ present, but the count check above does that
 
 if __name__ == '__main__':
     unittest.main()
