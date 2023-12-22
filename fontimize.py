@@ -16,12 +16,15 @@
 # of the build process, to optimise the fonts used by the site. It's now been extracted into a  
 # separate library, and is available on GitHub at github.com/vintagedave/fontimize
 
+import os
+import sys
 from bs4 import BeautifulSoup
 from ttf2web import TTF2Web
 from os import path
 import tinycss2
 import typing
 import pathlib
+from pathvalidate import ValidationError, validate_filename
     
 def _get_unicode_string(char : chr, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
@@ -157,7 +160,7 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
         savings = sum_orig - sum_new;
         savings_percent = savings / sum_orig * 100 
         print("  Savings: " +  _file_size_to_readable(savings) + " less, which is " + str(round(savings_percent, 1)) + "%!")
-        print("Done. Thankyou for using Fontimize!") # A play on Font and Optimise, haha, so good pun clever. But seriously - hopefully a memorable name!
+        print("Thankyou for using Fontimize!") # A play on Font and Optimise, haha, so good pun clever. But seriously - hopefully a memorable name!
 
     # Return a dict of input font file -> output font file, eg for CSS to be updated
     return res
@@ -230,15 +233,15 @@ def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
 # First, collect all strings from those files.
 # Then, also parse to get all the CSS files they use. From those CSS files, collect all the fonts they use in @font-face src,
 # plus look for any additional characters that will be reflected in rendered webpage output, such as :before and :after pseudo-elements.
-def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True, fonts : list[str] = []) -> dict[str, typing.Any]:
-    if len(files) == 0:
+def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True, fonts : list[str] = [], addtl_text : str = "") -> dict[str, typing.Any]:
+    if (len(files) == 0) and len(addtl_text) == 0: # If you specify any text, input files are optional -- note, not documented, used for cmd line app
         print("Error: No input files. Exiting.")
         res = {
             "css" : [],
             "fonts" : [] 
         }
     
-    text = ""
+    text = addtl_text
     css_files : set[str] = set()
     font_files : set[str] = set()
     for f in fonts: # user-specified input font files
@@ -262,6 +265,15 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
                         css_files.add(adjusted_css_path)
             else: # not HTML, treat as text
                 text += file.read()
+
+    # Sanity check that there is any text to process
+    if len(text) == 0:
+        print("Error: No text found in the input files or additional text. Exiting.")
+        res = {
+            "css" : [],
+            "fonts" : [] 
+        }
+        return res
 
     # Extract fonts from CSS files
     for css_file in css_files:
@@ -318,13 +330,13 @@ if __name__ == '__main__':
         epilog="""
 Examples:
     fontimize.py 1.html 2.txt
-    fontimize.py --text "The fonts will contain only the glyphs in this string"
     fontimize.py --outputdir output --subsetname MySubset --verbose 1.html 2.txt
+    fontimize.py --text "The fonts will contain only the glyphs in this string" --fonts "Arial.tff" "Times New Roman.ttf"
                 """)
     
-    parser.add_argument('inputfiles', default=[], help='Input files to parse: .htm and .html are parsed as HTML to extract used text, all other files are treated as text')
+    parser.add_argument('inputfiles', default=[], nargs='*', help='Input files to parse: .htm and .html are parsed as HTML to extract used text, all other files are treated as text')
     parser.add_argument('-t', '--text', type=str, help='Input text to parse, specified directly on the command line')
-    parser.add_argument('-f', '--fonts', type=str, help='Input font files')
+    parser.add_argument('-f', '--fonts', default=[], nargs='*', help='Input font files')
 
     group_output = parser.add_argument_group('Output', 'Specify font output directory and font subset phrase in the generated filenames')
     group_output.add_argument("-o", "--outputdir", type=str, 
@@ -342,4 +354,71 @@ Examples:
 
     args = parser.parse_args()
 
+    # If both --text and inputfiles are specified, give an error
+    if args.text and args.inputfiles:
+        print("Both --text and input files cannot be specified at the same time.")
+        sys.exit(1)
+     
+    # If neither --text nor inputfiles are specified, give an error
+    if not args.text and not args.inputfiles:
+        print("Either --text or input files must be specified.")
+        sys.exit(1)
 
+    _addtl_text = ""
+    if args.text:
+        _addtl_text = args.text
+
+    # If inputfiles are specified, test they exist
+    _inputfiles = []
+    if args.inputfiles:
+        for file in args.inputfiles:
+            if not os.path.exists(file):
+                print(f"Input file '{file}' does not exist.")
+                sys.exit(1)
+        _inputfiles = args.inputfiles
+
+    # If fonts are specified, test they exist
+    _fonts = []
+    if args.fonts:
+        for file in args.fonts:
+            if not os.path.exists(file):
+                print(f"Font file '{file}' does not exist.")
+                sys.exit(1)
+        _fonts = args.fonts
+
+    # If outputdir is specified, test it exists
+    _outputdir = ""
+    if args.outputdir:
+        if not os.path.exists(args.outputdir):
+            print(f"Output directory '{args.outputdir}' does not exist.")
+            sys.exit(1)
+        _outputdir = args.outputdir
+
+    # If subsetname is specified, test it's valid
+    _subsetname = ""
+    if args.subsetname:
+        try:
+            validate_filename(args.subsetname)
+        except ValidationError as e:
+            print(f"Subset name '{args.subsetname}' is not valid: {e}")
+            sys.exit(1)
+        _subsetname = args.subsetname
+
+    _verbose = False
+    if args.verbose:
+        _verbose = args.verbose;
+    
+    _printstats = True
+    if args.nostats:
+        _printstats = not args.nostats
+
+    res = optimise_fonts_for_files(_inputfiles,
+                                   font_output_dir=_outputdir, 
+                                   subsetname=_subsetname, 
+                                   verbose=_verbose, 
+                                   print_stats=_printstats, 
+                                   fonts=_fonts, 
+                                   addtl_text=_addtl_text)
+    
+    if args.verbose:              
+        print("Done.")
