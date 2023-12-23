@@ -356,12 +356,12 @@ Examples:
 
     # If both --text and inputfiles are specified, give an error
     if args.text and args.inputfiles:
-        print("Both --text and input files cannot be specified at the same time.")
+        print("Error: Both --text and input files cannot be specified at the same time.")
         sys.exit(1)
      
     # If neither --text nor inputfiles are specified, give an error
     if not args.text and not args.inputfiles:
-        print("Either --text or input files must be specified.")
+        print("Error: Either --text or input files must be specified.")
         sys.exit(1)
 
     _addtl_text = ""
@@ -373,7 +373,7 @@ Examples:
     if args.inputfiles:
         for file in args.inputfiles:
             if not os.path.exists(file):
-                print(f"Input file '{file}' does not exist.")
+                print(f"Error: Input file '{file}' does not exist.")
                 sys.exit(1)
         _inputfiles = args.inputfiles
 
@@ -382,7 +382,7 @@ Examples:
     if args.fonts:
         for file in args.fonts:
             if not os.path.exists(file):
-                print(f"Font file '{file}' does not exist.")
+                print(f"Error: Font file '{file}' does not exist.")
                 sys.exit(1)
         _fonts = args.fonts
 
@@ -390,7 +390,7 @@ Examples:
     _outputdir = ""
     if args.outputdir:
         if not os.path.exists(args.outputdir):
-            print(f"Output directory '{args.outputdir}' does not exist.")
+            print(f"Error: Output directory '{args.outputdir}' does not exist.")
             sys.exit(1)
         _outputdir = args.outputdir
 
@@ -400,7 +400,7 @@ Examples:
         try:
             validate_filename(args.subsetname)
         except ValidationError as e:
-            print(f"Subset name '{args.subsetname}' is not valid: {e}")
+            print(f"Error: Subset name '{args.subsetname}' is not valid: {e}")
             sys.exit(1)
         _subsetname = args.subsetname
 
