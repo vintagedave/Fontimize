@@ -20,9 +20,7 @@ After running Fontimize, the total size for *all fonts combined* is 76KB.
 
 # Usage
 
-Fontimize is a Python library, and can be included in your Python software or used stand-alone on the command line. I myself use it as part of a custom static site generator to build my site: it runs as the final step, optimizing fonts based on the generated on-disk HTML files, and I use the return values (what fonts it created, and what CSS files it analysed) to rewrite the CSS to point at the new fonts.
-
-(Rewriting CSS is not currently a feature provided by Fontimizer; please [create an issue](https://github.com/vintagedave/Fontimize/issues) or pull request if you'd like it to be. At the current time, the library will generate new files (new fonts) and return a map (dict or text output) of the old to new fonts, ie what to replace, but will not rewrite existing files. This is for safety by design: if you want to modify input or what's already on disk, you need to do it explicitly. The exception is the output fonts, which are always written without checking if they already exist.)
+Fontimize is a Python library, and can be included in your Python software or used stand-alone on the command line.
 
 ## Library
 
@@ -117,6 +115,35 @@ Other parameters (`fonts`, `fontpath`, `subsetname`, `verbose`, `print_stats`) a
 
 ## Command line
 
+The commandline tool can be used standalone or integrated into a content generation pipeline.
+
+Simple usage:
+
+`python3 fontimize.py file_a.html file_b.html`
+
+This parses the HTML, plus any referenced external CSS files, to find both glyphs and used fonts. It generates new font files in the same location as the input font files.
+
+`python3 fontimize.py --text "The fonts will contain only the glyphs in this string" --fonts "Arial.tff" "Times New Roman.ttf"`
+
+This generates only the glyphs required for the specified string, and creates new versions of Arial and Times New Roman in WOFF2 format in the same location as the input font files.
+
+### Reference
+
+#### Input
+
+* Usually, pass input files. HTML will be parsed for referenced CSS and fonts; all other files will be parsed as text.
+* `--text "string here"` (`-t`): The glyphs used to render this string will be added to the glyphs found in the input files, if any are specified. You must pass either input files or text (or both), otherwise an error will be given.
+* `--fonts "a.ttf" "b.ttf"` (`-f`): Optional list of input fonts. These will be added to any found referenced through HTML/CSS.
+
+#### Output
+
+* `--outputdir folder_here` (`-o`): Directory in which to place the generated font files. This must already exist.
+* `--subsetname MySubset` (`-s`): Phrase used in the generated font filenames. It's important to differentiate the output fonts from the input fonts, because (by definition as a subset) they are incomplete.
+
+#### Other
+
+* `--verbose` (`-v`): Outputs detailed information as it processes
+* `--nostats` (`-n`): Does not print information about optimised results at the end
 
 ## Tests
 
@@ -126,9 +153,14 @@ The `tests` folder contains several fonts that are licensed under the SIL Open F
 
 # Notes
 
+ I myself use Fontimize as part of a custom static site generator to build my site: it runs as the final step, optimizing fonts based on the generated on-disk HTML files, and I use the return values (what fonts it created, and what CSS files it analysed) to rewrite the CSS to point at the new fonts.
+
+(Rewriting CSS is not currently a feature provided by Fontimizer; please [create an issue](https://github.com/vintagedave/Fontimize/issues) or pull request if you'd like it to be. At the current time, the library will generate new files (new fonts) and return a map (dict or text output) of the old to new fonts, ie what to replace, but will not rewrite existing files. This is for safety by design: if you want to modify input or what's already on disk, you need to do it explicitly. The exception is the output fonts, which are always written without checking if they already exist.)
+
 * By default, the new subset fonts will have a name containing 'FontimizerSubset', eg `Arial.FontimizerSubset.woff2`. You can customise this through the `subsetname` method parameter or `--subsetname=Foo` commandline parameter. You can change it to whatever you want, but it is strongly recommended to use a subset name, in order to not mistake the optimized subsetted font for the original containing all glyphs. The use of `FontimizeSubset` by default is to hopefully point anyone who spots it back to this library, so they can use it too. There is no need to retain it and you can use any phrase you wish.
-* CSS pseudo-elements: yes, Fontimize parses CSS not just for the fonts that are used, but for glyphs that are presented onscreen. If you use `:before` or `:after`, the text / characters in those pseudo-elements are added to the characters emitted in the optimised fonts.
+* CSS pseudo-elements: **yes,** Fontimize parses CSS not just for the fonts that are used, but for glyphs that are presented onscreen. If you use `:before` or `:after`, the text / characters in those pseudo-elements are added to the characters emitted in the optimised fonts.
 * Inline CSS: no, Fontimizer does not currently parse inline CSS in a HTML file. It assumes you're using external CSS and finds those from your `style` links in the `<head>` and parses those for fonts etc. If this would be useful to you please [raise an issue](https://github.com/vintagedave/Fontimize/issues).
-* It's really nice (but not required) that if you use Fontimizer, to link to daveondesign/fontimizer.html or this github repo. That's to point other people to the tool. Many thanks :)
+* Additional characters: when single or double quotes are found in the input text, the subset contains left- and right-leaning quotes as well. If a dash is found, the subset contains en- and em-dashes as well.
+* It's really nice (but not required) that if you use Fontimizer, to link to daveon.design/fontimizer.html or this github repo. That's to point other people to the tool. Many thanks :)
 
 
