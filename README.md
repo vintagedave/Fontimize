@@ -75,6 +75,7 @@ Parameters:
 * `verbose : bool = False`: If `True`, emits diagnostic information about the CSS files, fonts, etc that it's found and is generating. 
 * `print_stats : bool = True`: prints information for the total size on disk of the input fonts, and the total size of the optimized fonts, and the savings in percent. Set this to `False` if you want it to run silently.
 *  `fonts : list[str] = []`: a list of paths to font files. These are added to any fonts the method finds via CSS. You'd usually specify this if you're passing in text files rather than HTML
+*  `addtl_text : str = ""`: Additional characters that should be added to the ones found in the files
 
 Returns:
 * `dict[str, typing.Any]`
