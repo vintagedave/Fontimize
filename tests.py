@@ -131,7 +131,7 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
 
     def setUp(self):
         self.files = ['tests/test1-index-css.html', 'tests/test.txt', 'tests/test2.html']
-        self.font_output_dir = 'output'
+        self.font_output_dir = 'tests/output'
         self.subsetname = 'TestFilesSubset'
         self.verbose = False
         self.print_stats = False
@@ -173,13 +173,13 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         self.maxDiff = None # See full results of below comparison
         self.assertDictEqual(fonts, 
                              {
-                                 'tests/Spirax-Regular.ttf': 'output/Spirax-Regular.TestFilesSubset.woff2',
-                                 'tests/SortsMillGoudy-Italic.ttf': 'output/SortsMillGoudy-Italic.TestFilesSubset.woff2',
-                                 'tests/SortsMillGoudy-Regular.ttf': 'output/SortsMillGoudy-Regular.TestFilesSubset.woff2',
-                                 'tests/NotoSansJP-VariableFont_wght.ttf': 'output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2',
-                                 'tests/Whisper-Regular.ttf': 'output/Whisper-Regular.TestFilesSubset.woff2',
-                                 'tests/NotoSans-VariableFont_wdth,wght.ttf': 'output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2',
-                                 'tests/EBGaramond-VariableFont_wght.ttf': 'output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'
+                                 'tests/Spirax-Regular.ttf': 'tests/output/Spirax-Regular.TestFilesSubset.woff2',
+                                 'tests/SortsMillGoudy-Italic.ttf': 'tests/output/SortsMillGoudy-Italic.TestFilesSubset.woff2',
+                                 'tests/SortsMillGoudy-Regular.ttf': 'tests/output/SortsMillGoudy-Regular.TestFilesSubset.woff2',
+                                 'tests/NotoSansJP-VariableFont_wght.ttf': 'tests/output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2',
+                                 'tests/Whisper-Regular.ttf': 'tests/output/Whisper-Regular.TestFilesSubset.woff2',
+                                 'tests/NotoSans-VariableFont_wdth,wght.ttf': 'tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2',
+                                 'tests/EBGaramond-VariableFont_wght.ttf': 'tests/output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'
                              }
                             )
         
