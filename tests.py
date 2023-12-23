@@ -192,26 +192,27 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         
         # Check glyph counts (+1 is ".notdef", present in all fonts)
         # space and '(),-.:;? (=10 with space) and 0123479 (=7) and A-Z (minus BFILRYZ, =19) and a-z (minus z, =25) and acircumflex and ecircumflex = 2
+        # Becaue of ', the curled left adn right quotes are added; because of -, en- and em-dashes are added, thus +4
         # Note that test.txt contains Kanji, Hindi and Vietnamese. Kanji and Hindi are not in the Spirax input font, but the circumflexes come from Vietnamese support.
-        self.assertEqual(10 + 7 + 19 + 25 + 2 + 1, _count_glyphs_in_font('output/Spirax-Regular.TestFilesSubset.woff2'))
+        self.assertEqual(10 + 7 + 19 + 25 + 2 + 4 + 1, _count_glyphs_in_font('tests/output/Spirax-Regular.TestFilesSubset.woff2'))
         # EB Garamond contains many more glyphs
-        self.assertEqual(111, _count_glyphs_in_font('output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'))
+        self.assertEqual(115, _count_glyphs_in_font('tests/output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'))
 
         # Check specific characters are present
         # U+1EE5 is "u with dot below", ụ, which is in test.txt - Vietnamese
-        self.assertTrue(_font_contains('output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2', 'uni1EE5'))
+        self.assertTrue(_font_contains('tests/output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2', 'uni1EE5'))
         # Kanji
-        self.assertTrue(_font_contains('output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2', 'uni6F22'))
-        self.assertTrue(_font_contains('output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2', 'uni5B57'))
+        self.assertTrue(_font_contains('tests/output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2', 'uni6F22'))
+        self.assertTrue(_font_contains('tests/output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2', 'uni5B57'))
         # The above is the Japanese version: Noto Sans JP. The other Noto Sans font does not support Kanji
         # so as a sanity check, verify the glyphs are not there
-        self.assertFalse(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni6F22'))
-        self.assertFalse(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni5B57'))
+        self.assertFalse(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni6F22'))
+        self.assertFalse(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni5B57'))
         # Devangari (Hindi)
         # Supported by Noto Sans
-        self.assertTrue(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0906')) # char 1 in text.txt
-        self.assertTrue(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0927')) # char 2 (part) in text.txt
-        self.assertTrue(_font_contains('output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0941')) # char 2 (part) in text.txt
+        self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0906')) # char 1 in text.txt
+        self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0927')) # char 2 (part) in text.txt
+        self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0941')) # char 2 (part) in text.txt
         # Could check that glyphs (in general) are _not_ present, but the count check above does that
 
 if __name__ == '__main__':
