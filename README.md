@@ -85,6 +85,8 @@ Returns:
 * `dict[str, typing.Any]`
 * `return_value["css"]` -> list of unique CSS files that the HTML files use
 * `return_value["fonts"]` -> a `dict` where `keys()` are the original font files, and the value for each key is the replacement font file that was generated. You can use this to update references to the original font files. Note that Fontimizer does not rewrite the input CSS.
+* `return_value["chars"]` -> a `set` of characters found when parsing the input
+* `return_value["uranges]` -> the Unicode ranges for the same characters: "U+1000-2000, U+2500-2501", etc. Note the second number in each pair does not have the "U+" -- this matches the required input format for the font library Fontimize uses
 
 ### `optimise_fonts_for_html_contents()`
 
