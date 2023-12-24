@@ -117,6 +117,7 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
     verbosity = 2 if verbose else 0 # ttf2web has 0, 1, 2, so match that to off and on
 
     res : dict[str, typing.Any] = {}
+    res["css"] = {} # at this level there are no CSS files, include just to prevent errors for API consumer
 
     characters = get_used_characters_in_str(text)
 
