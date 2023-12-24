@@ -113,8 +113,10 @@ def _file_size_to_readable(size : int) -> str:
 
 # Takes the input text, and the fonts, and generates new font files
 # Other methods (eg taking HTML files, or multiple pieces of text) all end up here
-def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, str]:
+def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, typing.Any]:
     verbosity = 2 if verbose else 0 # ttf2web has 0, 1, 2, so match that to off and on
+
+    res : dict[str, typing.Any] = {}
 
     characters = get_used_characters_in_str(text)
 
@@ -122,20 +124,23 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
     if verbosity >= 2:
         print("Characters:")
         print("  " + str(char_list))
+    res["chars"] = characters # set of characters used in the input text
 
     char_ranges = _get_char_ranges(char_list)
     if verbosity >= 2:
         print("Character ranges:")
         print("  " + str(char_ranges))
     
-    uranges = [[subsetname, ', '.join(r.get_range() for r in char_ranges)]] # subsetname here will be in the generated font, eg 'Arial.FontimizeSubset.woff2'
+    uranges_str = ', '.join(r.get_range() for r in char_ranges)
+    uranges = [[subsetname, uranges_str]] # subsetname here will be in the generated font, eg 'Arial.FontimizeSubset.woff2'
     if verbosity >= 2:
         print("Unicode ranges:")
-        print("  " + str(uranges))    
+        print("  " + uranges_str)  
+    res["uranges"] = uranges_str # list of unicode ranges matching the characters used in the input text
 
-    res : dict[str, str] = {}
     # For each font, generate a new font file using only the used characters
     # By default, place it in the same folder as the respective font, unless fontpath is specified
+    res["fonts"] = {} # dict of old font path -> new font path
     for font in fonts:
         assetdir = fontpath if fontpath else path.dirname(font)
         t2w = TTF2Web(font, uranges, assetdir=assetdir)
@@ -143,18 +148,22 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
         # print(woff2_list)
         assert len(woff2_list) == 1 # We only expect one font file to be generated, per font input
         assert len(woff2_list[0]) == 2 # Pair of font, plus ranges -- we only care about [0], the font
-        res[font] = woff2_list[0][0]
+        res["fonts"][font] = woff2_list[0][0]
 
     if verbosity >= 2:
         print("Generated the following fonts from the originals:")
-        for k in res.keys():
-            print("  " + k + " -> " + res[k])
+        for k in res["fonts"].keys():
+            print("  " + k + " ->\n    " + res["fonts"][k])
 
     if (verbosity >= 2) or print_stats:
         print("Results:")
-        print("  Fonts processed: " + str(len(res)))
-        sum_orig =  _get_file_size_sum(list(res.keys()))
-        sum_new = _get_file_size_sum(list(res.values())) 
+        print("  Fonts processed: " + str(len(res["fonts"])))
+        if (verbosity == 1): # If 2, printed above already
+            print("  Generated (use verbose output for input -> generated map):")
+            for k in res["fonts"].keys():
+                print("    " + res["fonts"][k])
+        sum_orig =  _get_file_size_sum(list(res["fonts"].keys()))
+        sum_new = _get_file_size_sum(list(res["fonts"].values())) 
         print("  Total original font size: " + _file_size_to_readable(sum_orig))
         print("  Total optimised font size: " + _file_size_to_readable(sum_new))
         savings = sum_orig - sum_new;
@@ -162,11 +171,10 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
         print("  Savings: " +  _file_size_to_readable(savings) + " less, which is " + str(round(savings_percent, 1)) + "%!")
         print("Thankyou for using Fontimize!") # A play on Font and Optimise, haha, so good pun clever. But seriously - hopefully a memorable name!
 
-    # Return a dict of input font file -> output font file, eg for CSS to be updated
     return res
 
 # Takes a list of strings, and otherwise does the same as optimise_fonts
-def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, str]:
+def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, typing.Any]:
     text = ""
     for t in texts:
         text = text + t
@@ -174,7 +182,7 @@ def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontp
 
 # Takes a list of HTML strings, and parses those to get the used text (ie ignoring HTML tags);
 # then uses that to do the same as optimise_fonts
-def optimise_fonts_for_html_contents(html_contents : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, str]:
+def optimise_fonts_for_html_contents(html_contents : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, typing.Any]:
     text = ""
     for html in html_contents:
         soup = BeautifulSoup(html, 'html.parser')
@@ -238,7 +246,9 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
         print("Error: No input files. Exiting.")
         res = {
             "css" : [],
-            "fonts" : [] 
+            "fonts" : [],
+            "chars": set(),
+            "uranges": []
         }
     
     text = addtl_text
@@ -271,7 +281,9 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
         print("Error: No text found in the input files or additional text. Exiting.")
         res = {
             "css" : [],
-            "fonts" : [] 
+            "fonts" : [],
+            "chars": set(),
+            "uranges": []
         }
         return res
 
@@ -298,10 +310,12 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
 
     if verbose:
         print("Found the following CSS files:")
-        print(css_files)
+        for css_file in css_files:
+            print("  " + css_file)
 
         print("Found the following fonts:")
-        print(font_files)
+        for font_file in font_files:
+            print("  " + font_file)
 
     # print("Found the following text:")
     # print(text)
@@ -310,15 +324,14 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
         print("Error: No fonts found in the input files. Exiting.")
         res = {
             "css" : css_files,
-            "fonts" : [] 
+            "fonts" : [],
+            "chars": set(),
+            "uranges": []
         }
         return res
 
-    replacement_fonts = optimise_fonts(text, font_files, fontpath=font_output_dir, subsetname=subsetname, verbose=verbose, print_stats=print_stats)
-    res = {
-        "css" : css_files,
-        "fonts" : replacement_fonts 
-    }
+    res = optimise_fonts(text, font_files, fontpath=font_output_dir, subsetname=subsetname, verbose=verbose, print_stats=print_stats)
+    res["css"] = css_files
     return res;
 
 

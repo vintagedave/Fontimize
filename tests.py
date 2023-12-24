@@ -87,24 +87,26 @@ class TestOptimiseFonts(unittest.TestCase):
         result = optimise_fonts(self.test_string, ['tests/Spirax-Regular.ttf'], fontpath='tests/output', verbose=False, print_stats=False)
         # Basics
         self.assertIsInstance(result, dict)
-        self.assertIn('tests/Spirax-Regular.ttf', result)
+        foundfonts = result["fonts"]
+        self.assertIn('tests/Spirax-Regular.ttf', foundfonts)
         # Generated with the right name
-        self.assertEqual(result['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
+        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
         # If the number of glyphs in the font matches the expected number
         # For +1, see test_optimise_fonts_with_empty_text
-        self.assertEqual(len(self.test_string) + 1, _count_glyphs_in_font(result['tests/Spirax-Regular.ttf']))
+        self.assertEqual(len(self.test_string) + 1, _count_glyphs_in_font(foundfonts['tests/Spirax-Regular.ttf']))
 
     def test_optimise_fonts_with_multiple_fonts(self):
         result = optimise_fonts(self.test_string,
             ['tests/Spirax-Regular.ttf', 'tests/EBGaramond-VariableFont_wght.ttf', 'tests/EBGaramond-Italic-VariableFont_wght.ttf'],
             fontpath='tests/output', verbose=False, print_stats=False)
         self.assertIsInstance(result, dict)
-        self.assertIn('tests/Spirax-Regular.ttf', result)
-        self.assertEqual(result['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
-        self.assertIn('tests/EBGaramond-VariableFont_wght.ttf', result)
-        self.assertEqual(result['tests/EBGaramond-VariableFont_wght.ttf'], 'tests/output/EBGaramond-VariableFont_wght.FontimizeSubset.woff2')
-        self.assertIn('tests/EBGaramond-Italic-VariableFont_wght.ttf', result)
-        self.assertEqual(result['tests/EBGaramond-Italic-VariableFont_wght.ttf'], 'tests/output/EBGaramond-Italic-VariableFont_wght.FontimizeSubset.woff2')
+        foundfonts = result["fonts"]
+        self.assertIn('tests/Spirax-Regular.ttf', foundfonts)
+        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
+        self.assertIn('tests/EBGaramond-VariableFont_wght.ttf', foundfonts)
+        self.assertEqual(foundfonts['tests/EBGaramond-VariableFont_wght.ttf'], 'tests/output/EBGaramond-VariableFont_wght.FontimizeSubset.woff2')
+        self.assertIn('tests/EBGaramond-Italic-VariableFont_wght.ttf', foundfonts)
+        self.assertEqual(foundfonts['tests/EBGaramond-Italic-VariableFont_wght.ttf'], 'tests/output/EBGaramond-Italic-VariableFont_wght.FontimizeSubset.woff2')
         # If the number of glyphs in the font matches the expected number
         # + 1 for the tests below -- see test_optimise_fonts_with_empty_text
         self.assertEqual(len(self.test_string) + 1, _count_glyphs_in_font('tests/output/Spirax-Regular.FontimizeSubset.woff2'))
@@ -118,8 +120,9 @@ class TestOptimiseFonts(unittest.TestCase):
             fontpath='tests/output',
             verbose=False, print_stats=False)
         self.assertIsInstance(result, dict)
-        self.assertIn('tests/Spirax-Regular.ttf', result)
-        self.assertEqual(result['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
+        foundfonts = result["fonts"]
+        self.assertIn('tests/Spirax-Regular.ttf', foundfonts)
+        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
         # If the number of glyphs in the font matches the expected number: two, because an empty string is reported as containing space, see get_used_characters_in_str
         # and fonts also seem to contain ".notdef":
         #   > font.getGlyphOrder()
