@@ -41,20 +41,26 @@ To parse a set of HTML files on disk, and the CSS files they use, and export new
 ```python
 all_html_files = [ 'input/one.html', 'input/two.html' ]
 
-font_results = fontimize.optimise_fonts_for_files(all_html_files, verbose=False)
-css_files = font_results["css"]
-replacement_fonts_dict = font_results["fonts"]
+font_results = fontimize.optimise_fonts_for_files(all_html_files)
 
-print(css_files)
+print(font_results["css"])
 # Prints CSS files found used by any of the HTML input files:
 #  { 'input/main.css',
 #    'input/secondary.css' }
 
-print(replacement_fonts_dict)
-# Prints pairs of the old fonts to the new optimised font generated for it. Use this to, eg, rewrite your CSS
+print(font_results["fonts"])
+# Prints pairs mapping the old fonts to the new optimised font generated for each. Use this to, eg, rewrite your CSS
 # By default exports to the same folder as the input files; use `font_output_dir` to change
 #  { 'input/fonts/Arial.ttf': 'input/fonts/Arial.FontimizeSubset.woff2',
 #    'input/fonts/EB Garamond.ttf': 'input/fonts/EB Garamond.FontimizeSubset.woff2' }
+
+print(font_results["chars"]
+# Prints the set of characters that were found or synthesised that the output fonts will use
+#   { ',', 'u', '.', '@', 'n', 'a', '_', 'l', 'i', 'h', 'Q', 'y', 'w', 'T', 'q', 'j', ' ', 'p', 'm', 's', 'o', 't', 'c' ... }
+
+print(font_results["uranges"]
+# Prints the same set of characters, formatted as ranges of Unicode characters
+#   U+0020, U+002C, U+002E, U+0040, U+0051, U+0054, U+005F, U+0061-007A ...
 ```
 
 ### Full reference
