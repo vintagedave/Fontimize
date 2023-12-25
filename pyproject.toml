@@ -31,7 +31,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/vintagedave/fontimize"
 Issues = "https://github.com/vintagedave/fontimize/issues"
-Website = "https://daveon.design"
+Website = "https://fontimize.daveon.design"
 
 [build-system]
 requires = ["hatchling"]
