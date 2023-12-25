@@ -42,13 +42,13 @@ include = [
   "*.py",
   "LICENSE",
   "readme.md",
-  "/images",
-  "/tests",
+  "/images"
 ]
 exclude = [
   "/cmdout",
   "/tests/output",
-  "/__pycache__"
+  "/__pycache__",
+  "tests.py"
 ]
 
 [tool.hatch.build.targets.wheel]
