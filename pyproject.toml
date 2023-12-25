@@ -1,13 +1,12 @@
 [project]
 name = "fontimize"
-version = "0.8.8"
+version = "0.8.9"
 authors = [
   { name="David Millington", email="vintagedave@gmail.com" },
 ]
 description = "Easily create font subsets containing only characters used in your text or website"
 readme = "README.md"
 license = {file = "LICENSE"}
-requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
