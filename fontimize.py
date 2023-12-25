@@ -78,7 +78,7 @@ class charPair:
 
 # Taking a sorted list of characters, find the sequential subsets and return pairs of the start and end
 # of each sequential subset
-def _get_char_ranges(chars : list[chr]):
+def _get_char_ranges(chars : list[chr]) -> list[charPair]:
     chars.sort()
     if not chars:
         return []
