@@ -1,6 +1,6 @@
 [project]
 name = "fontimize"
-version = "0.8.6"
+version = "0.8.7"
 authors = [
   { name="David Millington", email="vintagedave@gmail.com" },
 ]
@@ -17,8 +17,6 @@ classifiers = [
 ]
 keywords = ["font", "glyphs", "characters", "minimize", "minimizer", "minimization", "optimize", "optimization", "subset", "ssg", "web"]
 dependencies = [
-  "os",
-  "sys",
   "bs4",
   "ttf2web",
   "tinycss2",
