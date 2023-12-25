@@ -22,8 +22,7 @@ dependencies = [
   "tinycss2",
   "typing",
   "pathlib",
-  "pathvalidate",
-  "unittest"
+  "pathvalidate"
 ]
 
 [project.urls]
