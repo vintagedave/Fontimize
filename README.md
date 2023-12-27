@@ -169,6 +169,6 @@ The `tests` folder contains several fonts that are licensed under the SIL Open F
 * CSS pseudo-elements: **yes,** Fontimize parses CSS not just for the fonts that are used, but for glyphs that are presented onscreen. If you use `:before` or `:after`, the text / characters in those pseudo-elements are added to the characters emitted in the optimised fonts.
 * Inline CSS: no, Fontimizer does not currently parse inline CSS in a HTML file. It assumes you're using external CSS and finds those from your `style` links in the `<head>` and parses those for fonts etc. If this would be useful to you please [raise an issue](https://github.com/vintagedave/Fontimize/issues).
 * Additional characters: when single or double quotes are found in the input text, the subset contains left- and right-leaning quotes as well. If a dash is found, the subset contains en- and em-dashes as well.
-* It's really nice (but not required) that if you use Fontimizer, to link to daveon.design/fontimizer.html or this github repo. That's to point other people to the tool. Many thanks :)
+* It's really nice (but not required) that if you use Fontimizer, to link to https://fontimize.daveon.design/ or this github repo. That's to point other people to the tool. Many thanks :)
 
 
