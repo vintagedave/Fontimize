@@ -143,7 +143,7 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
     # By default, place it in the same folder as the respective font, unless fontpath is specified
     res["fonts"] = {} # dict of old font path -> new font path
     for font in fonts:
-        assetdir = fontpath if fontpath else path.dirname(font)
+        assetdir = fontpath or path.dirname(font) or "."
         t2w = TTF2Web(font, uranges, assetdir=assetdir)
         woff2_list = t2w.generateWoff2(verbosity=verbosity)
         # print(woff2_list)
