@@ -159,16 +159,23 @@ Unit tests are run via `tests.py` and use the files in `tests\`. Note that this 
 
 The `tests` folder contains several fonts that are licensed under the SIL Open Font License.
 
-# Notes
 
- I myself use Fontimize as part of a custom static site generator to build my site: it runs as the final step, optimizing fonts based on the generated on-disk HTML files, and I use the return values (what fonts it created, and what CSS files it analysed) to rewrite the CSS to point at the new fonts.
+### Notes
 
-(Rewriting CSS is not currently a feature provided by Fontimizer; please [create an issue](https://github.com/vintagedave/Fontimize/issues) or pull request if you'd like it to be. At the current time, the library will generate new files (new fonts) and return a map (dict or text output) of the old to new fonts, ie what to replace, but will not rewrite existing files. This is for safety by design: if you want to modify input or what's already on disk, you need to do it explicitly. The exception is the output fonts, which are always written without checking if they already exist.)
+I use Fontimize as part of a custom static site generator to build my site. It operates as the final step, optimizing fonts based on the generated HTML files stored on disk. The return values from Fontimize—such as the fonts it created and the CSS files it analyzed—are then used to rewrite the CSS and point to the newly optimized fonts.
 
-* By default, the new subset fonts will have a name containing 'FontimizerSubset', eg `Arial.FontimizerSubset.woff2`. You can customise this through the `subsetname` method parameter or `--subsetname=Foo` commandline parameter. You can change it to whatever you want, but it is strongly recommended to use a subset name, in order to not mistake the optimized subsetted font for the original containing all glyphs. The use of `FontimizeSubset` by default is to hopefully point anyone who spots it back to this library, so they can use it too. There is no need to retain it and you can use any phrase you wish.
-* CSS pseudo-elements: **yes,** Fontimize parses CSS not just for the fonts that are used, but for glyphs that are presented onscreen. If you use `:before` or `:after`, the text / characters in those pseudo-elements are added to the characters emitted in the optimised fonts.
-* Inline CSS: no, Fontimizer does not currently parse inline CSS in a HTML file. It assumes you're using external CSS and finds those from your `style` links in the `<head>` and parses those for fonts etc. If this would be useful to you please [raise an issue](https://github.com/vintagedave/Fontimize/issues).
-* Additional characters: when single or double quotes are found in the input text, the subset contains left- and right-leaning quotes as well. If a dash is found, the subset contains en- and em-dashes as well.
-* It's really nice (but not required) that if you use Fontimizer, to link to https://fontimize.daveon.design/ or this github repo. That's to point other people to the tool. Many thanks :)
+(Rewriting CSS is not currently a feature provided by Fontimize; please [create an issue](https://github.com/vintagedave/Fontimize/issues) or pull request if you'd like it to be. Currently, the library generates new font files and returns a mapping (either as a dictionary or text output) that shows the old font files and the corresponding new ones. However, Fontimize does not modify existing CSS files, as this is by design for safety reasons. If you wish to modify the input or files already on disk, you will need to do so explicitly. The exception is the output fonts, which are always written without checking if they already exist.)
 
+* By default, the new subsetted fonts will be named with the suffix "FontimizerSubset", e.g., `Arial.FontimizerSubset.woff2`. You can customize the name of the subset font using the `subsetname` method parameter or the `--subsetname=Foo` command-line parameter. While it is recommended to use a subset name to avoid confusing the optimized font with the original font (which contains all the glyphs), you can use any name you prefer. The default name “FontimizerSubset” is simply a suggestion to point others back to this library, should they encounter it. It is not necessary to retain this name, and you are free to use a different phrase.
+
+* **CSS Pseudo-Elements:**  
+Fontimize parses CSS for both the fonts that are explicitly used and for any glyphs displayed on the screen. This includes glyphs in CSS pseudo-elements like `:before` and `:after`. If text or characters are defined in these pseudo-elements, they will be included in the subsetted fonts.
+
+* **Inline CSS:**  
+Fontimize does not currently parse inline CSS in HTML files. It assumes that external CSS is being used, which it finds through the `<link>` tags in the `<head>` section of the HTML document. Fontimize will then analyze those CSS files for fonts and glyphs. If parsing inline CSS would be helpful, please [raise an issue](https://github.com/vintagedave/Fontimize/issues).
+
+* **Additional Characters:**  
+When single or double quotes are found in the input text, the subsetted font will also include the corresponding left- and right-leaning quotes. Similarly, if a dash is found, the subset will include both en-dashes and em-dashes.
+
+* It's really nice (but not required) that if you use Fontimizer, to link to [https://fontimize.daveon.design/](https://fontimize.daveon.design/) or this GitHub repo. That's to point other people to the tool. Many thanks :)
 
