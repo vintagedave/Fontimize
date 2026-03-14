@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 import sys
-from fontimize import get_used_characters_in_html, charPair, _get_char_ranges, optimise_fonts, optimise_fonts_for_files
+from fontimize import get_used_characters_in_html, get_used_characters_in_str, charPair, _get_char_ranges, optimise_fonts, optimise_fonts_for_files
 from fontTools.ttLib import woff2, TTFont
 
 class TestGetUsedCharactersInHtml(unittest.TestCase):
@@ -217,6 +217,35 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0927')) # char 2 (part) in text.txt
         self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0941')) # char 2 (part) in text.txt
         # Could check that glyphs (in general) are _not_ present, but the count check above does that
+
+class TestBeartypeValidation(unittest.TestCase):
+    """Test that beartype catches invalid argument types at runtime."""
+
+    def test_get_used_characters_in_str_rejects_non_string(self) -> None:
+        from beartype.roar import BeartypeCallHintParamViolation
+        with self.assertRaises(BeartypeCallHintParamViolation):
+            get_used_characters_in_str(123)  # type: ignore[arg-type]
+
+    def test_get_used_characters_in_html_rejects_non_string(self) -> None:
+        from beartype.roar import BeartypeCallHintParamViolation
+        with self.assertRaises(BeartypeCallHintParamViolation):
+            get_used_characters_in_html(None)  # type: ignore[arg-type]
+
+    def test_optimise_fonts_rejects_non_collection_fonts(self) -> None:
+        from beartype.roar import BeartypeCallHintParamViolation
+        with self.assertRaises(BeartypeCallHintParamViolation):
+            optimise_fonts("hello", 123)  # type: ignore[arg-type]
+
+    def test_optimise_fonts_accepts_single_string_font(self) -> None:
+        """A single font path as a string should be treated as one font, not iterated by character."""
+        result = optimise_fonts("hello", "tests/Whisper-Regular.ttf", print_stats=False)
+        self.assertEqual(len(result["fonts"]), 1)
+
+    def test_optimise_fonts_for_files_rejects_non_list_files(self) -> None:
+        from beartype.roar import BeartypeCallHintParamViolation
+        with self.assertRaises(BeartypeCallHintParamViolation):
+            optimise_fonts_for_files("not a list")  # type: ignore[arg-type]
+
 
 if __name__ == '__main__':
     unittest.main()

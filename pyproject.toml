@@ -25,6 +25,7 @@ dependencies = [
   "ttf2web>=0.9.0",
   "tinycss2>=1.2.0",
   "pathvalidate>=2.5.0",
+  "beartype>=0.18.0",
 ]
 
 [project.optional-dependencies]
