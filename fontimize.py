@@ -101,11 +101,11 @@ def _get_char_ranges(chars : list[chr]) -> list[charPair]:
     return res
 
 # Get the total size of multiple files (used for calculating font file sizes)
-def _get_file_size_sum(files: list[str]) -> str:
-    sum = 0
+def _get_file_size_sum(files: list[str]) -> int:
+    total = 0
     for f in files:
-        sum = sum + path.getsize(f)
-    return sum
+        total = total + path.getsize(f)
+    return total
     
 # Convert to human-readable size in MB or KB
 def _file_size_to_readable(size : int) -> str:
@@ -176,19 +176,14 @@ def optimise_fonts(text : str, fonts : list[str], fontpath : str = "", subsetnam
 
 # Takes a list of strings, and otherwise does the same as optimise_fonts
 def optimise_fonts_for_multiple_text(texts : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, typing.Any]:
-    text = ""
-    for t in texts:
-        text = text + t
+    text = "".join(texts)
     return optimise_fonts(text, fonts, fontpath, verbose=verbose, print_stats=print_stats)
 
 # Takes a list of HTML strings, and parses those to get the used text (ie ignoring HTML tags);
 # then uses that to do the same as optimise_fonts
 def optimise_fonts_for_html_contents(html_contents : list[str], fonts : list[str], fontpath : str = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> dict[str, typing.Any]:
-    text = ""
-    for html in html_contents:
-        soup = BeautifulSoup(html, 'html.parser')
-        text = text + soup.get_text()
-    return optimise_fonts(text, fonts, fontpath, verbose=verbose, print_stats=print_stats)
+    texts = [BeautifulSoup(html, 'html.parser').get_text() for html in html_contents]
+    return optimise_fonts("".join(texts), fonts, fontpath, verbose=verbose, print_stats=print_stats)
 
 def _find_font_face_urls(css_contents : str) -> list[str]:
     parsed_css = tinycss2.parse_stylesheet(css_contents)
@@ -242,16 +237,19 @@ def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
 # First, collect all strings from those files.
 # Then, also parse to get all the CSS files they use. From those CSS files, collect all the fonts they use in @font-face src,
 # plus look for any additional characters that will be reflected in rendered webpage output, such as :before and :after pseudo-elements.
-def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True, fonts : list[str] = [], addtl_text : str = "") -> dict[str, typing.Any]:
+def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname = "FontimizeSubset", verbose : bool = False, print_stats : bool = True, fonts : list[str] | None = None, addtl_text : str = "") -> dict[str, typing.Any]:
+    if fonts is None:
+        fonts = []
+
     if (len(files) == 0) and len(addtl_text) == 0: # If you specify any text, input files are optional -- note, not documented, used for cmd line app
         print("Error: No input files. Exiting.")
-        res = {
+        return {
             "css" : [],
             "fonts" : [],
             "chars": set(),
             "uranges": []
         }
-    
+
     text = addtl_text
     css_files : set[str] = set()
     font_files : set[str] = set()
@@ -270,9 +268,11 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
 
                 # Extract CSS files the HTML references
                 for link in soup.find_all('link', href=True):
-                    if 'css' in link['href']:
-                        css_ref = link['href']
-                        adjusted_css_path = _get_path(f, css_ref) # It'll be relative, so relative to the HTML file
+                    href = link['href']
+                    if isinstance(href, list):  # BS4 can return a list for multi-valued attributes
+                        href = href[0]
+                    if 'css' in href:
+                        adjusted_css_path = _get_path(f, href) # It'll be relative, so relative to the HTML file
                         css_files.add(adjusted_css_path)
             else: # not HTML, treat as text
                 text += file.read()
@@ -302,7 +302,7 @@ def optimise_fonts_for_files(files : list[str], font_output_dir = "", subsetname
         font_urls = _find_font_face_urls(css)
         for font_url in font_urls:
             # Only handle local files -- this does not support remote files
-            adjusted_font_path = _get_path(adjusted_css_path, font_url) # Relative to the CSS file
+            adjusted_font_path = _get_path(css_file, font_url) # Relative to the CSS file
             if path.isfile(adjusted_font_path):
                 font_files.add(adjusted_font_path)
             else:
