@@ -1,8 +1,10 @@
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 import sys
-from fontimize import get_used_characters_in_html, get_used_characters_in_str, charPair, _get_char_ranges, optimise_fonts, optimise_fonts_for_files
+from fontimize import (get_used_characters_in_html, get_used_characters_in_str, charPair, _get_char_ranges,
+    optimise_fonts, optimise_fonts_for_files, _find_font_face_urls, _extract_pseudo_elements_content, _get_path)
 from fontTools.ttLib import woff2, TTFont
 
 class TestGetUsedCharactersInHtml(unittest.TestCase):
@@ -217,6 +219,168 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0927')) # char 2 (part) in text.txt
         self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0941')) # char 2 (part) in text.txt
         # Could check that glyphs (in general) are _not_ present, but the count check above does that
+
+class TestFindFontFaceUrls(unittest.TestCase):
+
+    def test_extracts_urls_from_css_test(self) -> None:
+        """All three @font-face src URLs in css_test.css should be found."""
+        with open('tests/css_test.css', 'r') as f:
+            css: str = f.read()
+        urls: list[str] = _find_font_face_urls(css)
+        self.assertEqual(urls, [
+            'EBGaramond-VariableFont_wght.ttf',
+            'DOESNOTEXIST.ttf',
+            'Spirax-Regular.ttf',
+        ])
+
+    def test_extracts_urls_from_css_index(self) -> None:
+        """Both @font-face src URLs in css_test-index.css should be found."""
+        with open('tests/css_test-index.css', 'r') as f:
+            css: str = f.read()
+        urls: list[str] = _find_font_face_urls(css)
+        self.assertEqual(urls, [
+            'SortsMillGoudy-Regular.ttf',
+            'SortsMillGoudy-Italic.ttf',
+        ])
+
+    def test_unquoted_url_extracted(self) -> None:
+        """url(font.ttf) without quotes should work the same as url('font.ttf')."""
+        css: str = "@font-face { font-family: 'test'; src: url(font.ttf) format('truetype'); }"
+        urls: list[str] = _find_font_face_urls(css)
+        self.assertEqual(urls, ['font.ttf'])
+
+    def test_local_source_skipped_url_extracted(self) -> None:
+        """local() is a font name, not a file path, so we can't subset it — only url() should be extracted."""
+        css: str = "@font-face { font-family: 'test'; src: local('MyFont'), url('font.ttf') format('truetype'); }"
+        urls: list[str] = _find_font_face_urls(css)
+        self.assertEqual(urls, ['font.ttf'])
+
+    def test_multiple_url_sources_in_one_rule(self) -> None:
+        """When src lists multiple url() entries (e.g. woff2 and ttf), all should be extracted."""
+        css: str = "@font-face { font-family: 'test'; src: url('font.woff2') format('woff2'), url('font.ttf') format('truetype'); }"
+        urls: list[str] = _find_font_face_urls(css)
+        self.assertEqual(urls, ['font.woff2', 'font.ttf'])
+
+    def test_no_font_face_rules(self) -> None:
+        css: str = "body { font-family: sans-serif; }"
+        urls: list[str] = _find_font_face_urls(css)
+        self.assertEqual(urls, [])
+
+    def test_empty_css(self) -> None:
+        urls: list[str] = _find_font_face_urls("")
+        self.assertEqual(urls, [])
+
+
+class TestExtractPseudoElementsContent(unittest.TestCase):
+
+    def test_extracts_from_css_test(self) -> None:
+        """css_test.css has cite:before and ul li:before with special characters."""
+        with open('tests/css_test.css', 'r') as f:
+            css: str = f.read()
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 2)
+        self.assertIn(' \u2E3A ', contents)  # " ⸺ " (two-em-dash with spaces)
+        self.assertIn('\u25B8', contents)     # "▸" (right-pointing triangle)
+
+    def test_extracts_from_css_index(self) -> None:
+        """css_test-index.css has .sidenote-long:before with a ✻ character."""
+        with open('tests/css_test-index.css', 'r') as f:
+            css: str = f.read()
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 1)
+        self.assertIn('\u273B', contents)  # "✻"
+
+    def test_double_colon_before(self) -> None:
+        """Both ::before and :before syntax should be recognized."""
+        css: str = "p::before { content: 'X'; }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(contents, ['X'])
+
+    def test_non_string_content_ignored(self) -> None:
+        """counter() and other non-string content values should not be returned."""
+        css: str = "ol li::before { content: counter(item); }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(contents, [])
+
+    def test_no_pseudo_elements(self) -> None:
+        css: str = "body { color: red; }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(contents, [])
+
+    def test_empty_css(self) -> None:
+        contents: list[str] = _extract_pseudo_elements_content("")
+        self.assertEqual(contents, [])
+
+
+class TestGetPath(unittest.TestCase):
+
+    def test_simple_relative(self) -> None:
+        result: str = _get_path('/a/b/c.html', 'style.css')
+        self.assertEqual(result, '/a/b/style.css')
+
+    def test_parent_traversal_normalized(self) -> None:
+        """../ in paths should be resolved, e.g. /a/b/../fonts/f.ttf becomes /a/fonts/f.ttf."""
+        result: str = _get_path('/a/b/c.html', '../fonts/f.ttf')
+        self.assertEqual(result, '/a/fonts/f.ttf')
+
+    def test_empty_dirname(self) -> None:
+        """A file with no directory path like 'c.html' has dirname '', so join just returns the relative path."""
+        result: str = _get_path('c.html', 'style.css')
+        self.assertEqual(result, 'style.css')
+
+    def test_absolute_relative_path(self) -> None:
+        """An absolute second argument should be returned as-is (os.path.join behaviour)."""
+        result: str = _get_path('/a/b/c.html', '/fonts/f.ttf')
+        self.assertEqual(result, '/fonts/f.ttf')
+
+
+class TestCssDetection(unittest.TestCase):
+    """Only actual .css files (or rel=stylesheet links) should be detected as CSS."""
+
+    def _make_temp_html(self, link_href: str) -> str:
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, dir='tests')
+        f.write(f'<html><head><link rel="alternate" href="{link_href}"></head><body>text</body></html>')
+        f.flush()
+        f.close()
+        return f.name
+
+    def test_css_href_detected(self) -> None:
+        """A .css href should be recognized and parsed."""
+        tmpfile: str = self._make_temp_html('css_test.css')
+        try:
+            result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+            expected_css: str = os.path.join(os.path.dirname(tmpfile), 'css_test.css')
+            self.assertIn(expected_css, result['css'])
+        finally:
+            os.unlink(tmpfile)
+
+    def test_non_css_file_not_detected(self) -> None:
+        """An HTML file whose name happens to contain 'css' (not_a_css_file.html)
+        should not be mistaken for a stylesheet.
+        (The file exists on disk so the test fails cleanly on the assertion,
+        not on a FileNotFoundError.)"""
+        tmpfile: str = self._make_temp_html('not_a_css_file.html')
+        try:
+            result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+            css_basenames: list[str] = [os.path.basename(p) for p in result['css']]
+            self.assertNotIn('not_a_css_file.html', css_basenames)
+        finally:
+            os.unlink(tmpfile)
+
+    def test_css_href_with_query_string(self) -> None:
+        """css_test.css?v=123 should be resolved to css_test.css — the query string
+        must be stripped before looking up the file."""
+        tmpfile: str = self._make_temp_html('css_test.css?v=123')
+        try:
+            result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+            css_paths: set[str] = result['css']
+            for p in css_paths:
+                self.assertNotIn('?', p, f"Query string not stripped from CSS path: {p}")
+            css_basenames: list[str] = [os.path.basename(p) for p in css_paths]
+            self.assertIn('css_test.css', css_basenames)
+        except FileNotFoundError as e:
+            self.fail(f"Query string was not stripped from CSS href before file access: {e}")
+
 
 class TestBeartypeValidation(unittest.TestCase):
     """Test that beartype catches invalid argument types at runtime."""
