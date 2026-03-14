@@ -7,21 +7,32 @@ authors = [
 description = "Easily create font subsets containing only characters used in your text or website"
 readme = "README.md"
 license = {file = "LICENSE"}
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
     "Development Status :: 4 - Beta",
-    "Topic :: Text Processing :: Fonts"
+    "Topic :: Text Processing :: Fonts",
 ]
 keywords = ["font", "glyphs", "characters", "minimize", "minimizer", "minimization", "optimize", "optimization", "subset", "ssg", "web"]
 dependencies = [
-  "bs4",
-  "ttf2web",
-  "tinycss2",
-  "typing",
-  "pathlib",
-  "pathvalidate"
+  "beautifulsoup4>=4.11.0",
+  "ttf2web>=0.9.0",
+  "tinycss2>=1.2.0",
+  "pathvalidate>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.0.0",
+  "pytest>=7.0.0",
+  "fonttools>=4.0.0",
+  "brotli>=1.0.0",
 ]
 
 [project.urls]
@@ -38,14 +49,26 @@ include = [
   "*.py",
   "LICENSE",
   "readme.md",
-  "/images"
+  "/images",
 ]
 exclude = [
   "/cmdout",
   "/tests/output",
   "/__pycache__",
-  "tests.py"
+  "tests.py",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["fontimize.py"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+explicit_package_bases = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests.py"]

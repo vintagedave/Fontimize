@@ -4,4 +4,7 @@ __pycache__
 .DS_Store
 cmdout
 fontimize_pypi_test
-cmdout
+dist
+.venv
+.pytest_cache
+*.egg-info
