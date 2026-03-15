@@ -23,7 +23,7 @@ keywords = ["font", "glyphs", "characters", "minimize", "minimizer", "minimizati
 dependencies = [
   "beautifulsoup4>=4.11.0",
   "ttf2web>=0.9.0",
-  "tinycss2>=1.2.0",
+  "cssutils>=2.11.1",
   "pathvalidate>=2.5.0",
   "beartype>=0.18.0",
 ]

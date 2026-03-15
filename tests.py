@@ -4,7 +4,8 @@ import unittest
 from unittest.mock import patch
 import sys
 from fontimize import (get_used_characters_in_html, get_used_characters_in_str, charPair, _get_char_ranges,
-    optimise_fonts, optimise_fonts_for_files, _find_font_face_urls, _extract_pseudo_elements_content, _get_path)
+    optimise_fonts, optimise_fonts_for_files, _find_font_face_urls, _extract_pseudo_elements_content, _get_path,
+    _rewrite_css)
 from fontTools.ttLib import woff2, TTFont
 
 class TestGetUsedCharactersInHtml(unittest.TestCase):
@@ -380,6 +381,90 @@ class TestCssDetection(unittest.TestCase):
             self.assertIn('css_test.css', css_basenames)
         except FileNotFoundError as e:
             self.fail(f"Query string was not stripped from CSS href before file access: {e}")
+
+
+class TestRewriteCss(unittest.TestCase):
+
+    def test_rewrites_mapped_font_url(self) -> None:
+        """A @font-face src URL that exists in font_mapping should be replaced with the woff2 path."""
+        css: str = "@font-face { font-family: 'text'; src: url('EBGaramond.ttf') format('truetype'); }"
+        font_mapping: dict[str, str] = {
+            '/site/fonts/EBGaramond.ttf': '/output/EBGaramond.FontimizeSubset.woff2',
+        }
+        output_path, rewritten = _rewrite_css('/site/fonts/style.css', css, font_mapping, '/output')
+        self.assertEqual(output_path, '/output/style.css')
+        self.assertIn('EBGaramond.FontimizeSubset.woff2', rewritten)
+        self.assertIn("format('woff2')", rewritten.replace('"', "'"))
+        self.assertNotIn('EBGaramond.ttf', rewritten)
+
+    def test_unmapped_font_url_unchanged(self) -> None:
+        """A @font-face src URL not in font_mapping should stay as-is."""
+        css: str = "@font-face { font-family: 'text'; src: url('Unknown.ttf') format('truetype'); }"
+        _, rewritten = _rewrite_css('/site/style.css', css, {}, '/output')
+        self.assertEqual(rewritten, css)
+
+    def test_non_font_face_css_preserved(self) -> None:
+        """CSS outside @font-face blocks must not be altered, even if it contains
+        invalid values like uppercase RGB() that cssutils would drop on a full round-trip."""
+        css: str = (
+            "body { background-color: RGB(255, 255, 255); }\n"
+            "@font-face { font-family: 'text'; src: url('font.ttf') format('truetype'); }\n"
+            "p { color: red; }\n"
+        )
+        font_mapping: dict[str, str] = {'/a/font.ttf': '/output/font.woff2'}
+        _, rewritten = _rewrite_css('/a/style.css', css, font_mapping, '/output')
+        # The body and p rules should be byte-for-byte identical
+        self.assertIn("body { background-color: RGB(255, 255, 255); }", rewritten)
+        self.assertIn("p { color: red; }", rewritten)
+
+    def test_multiple_font_faces_only_mapped_ones_changed(self) -> None:
+        """When CSS has several @font-face rules, only the ones with mapped fonts should change."""
+        css: str = (
+            "@font-face { font-family: 'a'; src: url('mapped.ttf') format('truetype'); }\n"
+            "@font-face { font-family: 'b'; src: url('unmapped.ttf') format('truetype'); }\n"
+        )
+        font_mapping: dict[str, str] = {'/dir/mapped.ttf': '/output/mapped.woff2'}
+        _, rewritten = _rewrite_css('/dir/style.css', css, font_mapping, '/output')
+        self.assertIn('mapped.woff2', rewritten)
+        # The unmapped rule should still reference the original file
+        self.assertIn('unmapped.ttf', rewritten)
+
+    def test_mixed_mapped_unmapped_urls_in_one_rule(self) -> None:
+        """When a single @font-face src has both a mapped and unmapped URL,
+        the unmapped URL and its format() must be preserved."""
+        css: str = "@font-face { font-family: 'text'; src: url('mapped.woff2') format('woff2'), url('unmapped.ttf') format('truetype'); }"
+        font_mapping: dict[str, str] = {'/dir/mapped.woff2': '/output/mapped.subset.woff2'}
+        _, rewritten = _rewrite_css('/dir/style.css', css, font_mapping, '/output')
+        self.assertIn('mapped.subset.woff2', rewritten)
+        self.assertIn('unmapped.ttf', rewritten)
+        # The unmapped URL's format must not be dropped
+        self.assertIn("format", rewritten.split('unmapped.ttf')[1])
+
+    def test_rewritten_css_key_in_result(self) -> None:
+        """optimise_fonts_for_files should include 'rewritten_css' in the result."""
+        result = optimise_fonts(
+            "hello", ['tests/Spirax-Regular.ttf'], fontpath='tests/output', print_stats=False
+        )
+        self.assertIn('rewritten_css', result)
+        self.assertIsInstance(result['rewritten_css'], dict)
+
+    def test_css_rewriter_callback_called(self) -> None:
+        """When css_rewriter is provided, it should be called instead of writing to disk."""
+        captured: list[tuple[str, str]] = []
+        def capture(path: str, content: str) -> None:
+            captured.append((path, content))
+
+        files: list[str] = ['tests/test2.html']
+        result = optimise_fonts_for_files(
+            files, font_output_dir='tests/output', fonts=['tests/Spirax-Regular.ttf'],
+            print_stats=False, css_rewriter=capture
+        )
+        # test2.html references css_test.css which has @font-face rules
+        if result['css']:
+            self.assertGreater(len(captured), 0)
+            for path, content in captured:
+                self.assertTrue(path.endswith('.css'))
+                self.assertIsInstance(content, str)
 
 
 class TestBeartypeValidation(unittest.TestCase):

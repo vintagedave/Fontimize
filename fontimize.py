@@ -6,27 +6,32 @@
 # Author: David Millington, github.com/vintagedave
 # License: GPLv3
 #
-# Wraps TTF2Web, which converts font files from TTF to WOFF2 allowing Unicode ranges to be specified.
-# Allows fonts to be converted and subbsetted for text, including passing a set of HTML files and
-# automatically using the characters in the HTML, plus user-visible characters in CSS files used 
-# by those HTML files (such as :before and :after pseudo-elements), and then converting / subsetting
-# the fonts specified by those CSS files.
+# Converts font files to subsetted WOFF2 containing only the characters actually used.
+# Accepts HTML files and automatically extracts the characters from the HTML, plus user-visible
+# characters in CSS files used by those HTML files (such as :before and :after pseudo-elements),
+# and then converts/subsets the fonts specified by those CSS files. Can optionally rewrite CSS
+# to reference the generated WOFF2 files.
 # 
 # Originally written as part of a private static site generator. Fontimizer is run as the final step
 # of the build process, to optimise the fonts used by the site. It's now been extracted into a  
 # separate library, and is available on GitHub at github.com/vintagedave/fontimize
 
 import os
+import re
 import sys
+import logging
+import warnings
 from bs4 import BeautifulSoup
 from ttf2web import TTF2Web
 from os import path
-import tinycss2
+import cssutils
 import pathlib
 from pathvalidate import ValidationError, validate_filename
 from typing import TypedDict
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from beartype import beartype
+
+cssutils.log.setLevel(logging.CRITICAL)
 
 
 class FontimizeResult(TypedDict):
@@ -35,6 +40,7 @@ class FontimizeResult(TypedDict):
     fonts: dict[str, str]
     chars: set[str]
     uranges: str
+    rewritten_css: dict[str, str]
     
 def _get_unicode_string(char : str, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
@@ -135,6 +141,7 @@ def optimise_fonts(text : str, fonts : Collection[str] | str, fontpath : str = "
         "fonts": {},
         "chars": set(),
         "uranges": "",
+        "rewritten_css": {},
     }
 
     characters: set[str] = get_used_characters_in_str(text)
@@ -206,52 +213,160 @@ def optimise_fonts_for_html_contents(html_contents : Collection[str] | str, font
     texts: list[str] = [BeautifulSoup(html, 'html.parser').get_text() for html in html_contents]
     return optimise_fonts("".join(texts), fonts, fontpath, verbose=verbose, print_stats=print_stats)
 
-def _find_font_face_urls(css_contents : str) -> list[str]:
-    parsed_css = tinycss2.parse_stylesheet(css_contents)
+def _find_font_face_urls(css_contents: str) -> list[str]:
+    """Extract all font file URLs from @font-face src declarations.
+
+    Parses each @font-face rule's src property and collects URIs (the url() values).
+    local() font names are skipped — they reference system-installed fonts by name,
+    not file paths, so they can't be subset.
+    """
+    sheet: cssutils.css.CSSStyleSheet = cssutils.parseString(css_contents)
 
     urls: list[str] = []
 
-    for rule in parsed_css:
-        if rule.type == 'at-rule' and rule.lower_at_keyword == 'font-face':
-            # Parse the @font-face rule, find all src declaractions, parse them
-            font_face_rules = tinycss2.parse_declaration_list(rule.content)
-            for declaration in font_face_rules:
-                if declaration.type == 'declaration' and declaration.lower_name == 'src':
-                    # Manually parse the declaration value to extract the URL
-                    for token in declaration.value:
-                        if token.type == 'function' and token.lower_name == 'url':
-                            urls.append(token.arguments[0].value)
-                        else:
-                            continue;
-                    # This is instead of:
-                    # src_tokens = tinycss2.parse_component_value_list(declaration.value)
-                    # which generates an error swapping U+0000 with another value. Unknown why.
+    for rule in sheet:
+        if rule.type == rule.FONT_FACE_RULE:
+            # cssutils splits src into typed items: URIValue for url(), CSSFunction for local()/format()
+            css_value: cssutils.css.value.PropertyValue | None = rule.style.getPropertyCSSValue('src')
+            if css_value is None:
+                warnings.warn("@font-face rule has no parseable src property")
+                continue
+            for item in css_value:
+                # URIValue items have a .uri attribute; local() and format() do not
+                if hasattr(item, 'uri'):
+                    urls.append(item.uri)
 
     return urls
 
-def _get_path(known_file_path : str, relative_path : str) -> str:
+def _get_path(known_file_path: str, relative_path: str) -> str:
     base_dir: str = path.dirname(known_file_path)
 
     # Join the base directory with the relative path
     full_path: str = path.join(base_dir, relative_path)
 
-    return full_path
+    return path.normpath(full_path)
 
 def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
-    parsed_css = tinycss2.parse_stylesheet(css_contents, skip_whitespace=True)
+    """Extract string content from :before and :after pseudo-elements.
+
+    These characters (eg ▸ or ✻) appear in the rendered page and need to be
+    included in the font subset, even though they don't appear in HTML text.
+    Non-string content like counter() is ignored since it doesn't map to
+    fixed characters that need font glyphs.
+    """
+    sheet: cssutils.css.CSSStyleSheet = cssutils.parseString(css_contents)
 
     contents: list[str] = []
 
-    for rule in parsed_css:
-        if rule.type == 'qualified-rule':
-            prelude = tinycss2.serialize(rule.prelude)
-            if ':before' in prelude or ':after' in prelude: # this is something like cite:before, for example
-                declarations = tinycss2.parse_declaration_list(rule.content)
-                for declaration in declarations:
-                    if declaration.type == 'declaration' and declaration.lower_name == 'content':
-                        content_value = ''.join(token.value for token in declaration.value if token.type == 'string')
-                        contents.append(content_value)
+    for rule in sheet:
+        if rule.type == rule.STYLE_RULE:
+            selector: str = rule.selectorText
+            if ':before' in selector or ':after' in selector: # this is something like cite:before, for example
+                css_value: cssutils.css.value.PropertyValue | None = rule.style.getPropertyCSSValue('content')
+                if css_value is None:
+                    continue
+                for item in css_value:
+                    if isinstance(item, cssutils.css.value.CSSFunction):
+                        continue
+                    value: str = item.value
+                    if value:
+                        contents.append(value)
+
     return contents
+
+
+def _rewrite_css(css_path: str, css_contents: str, font_mapping: dict[str, str],
+                 output_dir: str) -> tuple[str, str]:
+    """Rewrite @font-face src URLs in CSS to point to generated .woff2 fonts.
+
+    This works in two phases:
+    1. Parse with cssutils and modify the src property of @font-face rules whose
+       font URLs appear in font_mapping. cssutils gives us a proper DOM so we can
+       identify url() vs local() vs format() items reliably.
+    2. Splice only the modified @font-face blocks back into the original CSS string,
+       so everything else (comments, non-standard properties, formatting) is preserved
+       byte-for-byte. We can't round-trip the whole file through cssutils because it
+       may silently drop properties it considers invalid.
+
+    Returns (output_path, rewritten_css_content).
+    """
+    sheet: cssutils.css.CSSStyleSheet = cssutils.parseString(css_contents)
+
+    # Phase 1: modify @font-face rules via cssutils DOM.
+    # We track which rules (by index) were modified so we know which source blocks
+    # to splice in phase 2.
+    parsed_font_faces: list[cssutils.css.CSSFontFaceRule] = []
+    modified_indices: set[int] = set()
+
+    for rule in sheet:
+        if rule.type != rule.FONT_FACE_RULE:
+            continue
+        idx: int = len(parsed_font_faces)
+        parsed_font_faces.append(rule)
+
+        css_value: cssutils.css.value.PropertyValue | None = rule.style.getPropertyCSSValue('src')
+        if css_value is None:
+            continue
+
+        # Rebuild the src value, replacing mapped font URLs with their woff2 equivalents.
+        # cssutils splits src into typed items, eg for:
+        #   src: url('font.ttf') format('truetype'), url('other.woff2') format('woff2')
+        # we get: URIValue, CSSFunction(format), URIValue, CSSFunction(format)
+        # We need to replace url+format pairs together when the url is mapped.
+        new_src_parts: list[str] = []
+        changed: bool = False
+        replaced_prev_url: bool = False
+        for item in css_value:
+            if hasattr(item, 'uri'):
+                resolved: str = _get_path(css_path, item.uri)
+                if resolved in font_mapping:
+                    new_font_path: str = font_mapping[resolved]
+                    rel_path: str = os.path.relpath(new_font_path, output_dir)
+                    new_src_parts.append(f"url('{rel_path}') format('woff2')")
+                    changed = True
+                    replaced_prev_url = True
+                else:
+                    new_src_parts.append(item.cssText)
+                    replaced_prev_url = False
+            elif isinstance(item, cssutils.css.value.CSSFunction) and item.cssText.startswith('format('):
+                # Skip format() only when the preceding url() was replaced — it's
+                # already included in the replacement string above. Unmapped URLs
+                # keep their original format().
+                if replaced_prev_url:
+                    replaced_prev_url = False
+                    continue
+                new_src_parts.append(item.cssText)
+            else:
+                new_src_parts.append(item.cssText)
+                replaced_prev_url = False
+
+        if changed:
+            rule.style.setProperty('src', ', '.join(new_src_parts))
+            modified_indices.add(idx)
+
+    if not modified_indices:
+        output_path: str = os.path.join(output_dir, os.path.basename(css_path))
+        return (output_path, css_contents)
+
+    # Phase 2: splice modified @font-face blocks into the original CSS string.
+    # We find @font-face blocks in the source text via regex — this is safe because
+    # @font-face rules cannot contain nested braces. The blocks appear in the same
+    # order as the parsed rules, so we match them by index.
+    source_blocks: list[re.Match[str]] = list(re.finditer(r'@font-face\s*\{[^}]*\}', css_contents))
+
+    new_css: str = css_contents
+    # Replace in reverse order so earlier string positions stay valid
+    for i in reversed(range(len(source_blocks))):
+        if i in modified_indices and i < len(parsed_font_faces):
+            match: re.Match[str] = source_blocks[i]
+            serialized: str = parsed_font_faces[i].cssText
+            if isinstance(serialized, bytes):
+                serialized = serialized.decode('utf-8')
+            new_css = new_css[:match.start()] + serialized + new_css[match.end():]
+
+    output_path = os.path.join(output_dir, os.path.basename(css_path))
+    return (output_path, new_css)
+
 
 # Takes a list of files on disk
 # HTML files are parsed; all others are treated as text
@@ -259,7 +374,7 @@ def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
 # Then, also parse to get all the CSS files they use. From those CSS files, collect all the fonts they use in @font-face src,
 # plus look for any additional characters that will be reflected in rendered webpage output, such as :before and :after pseudo-elements.
 @beartype
-def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subsetname : str = "FontimizeSubset", verbose : bool = False, print_stats : bool = True, fonts : Collection[str] | str | None = None, addtl_text : str = "") -> FontimizeResult:
+def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subsetname : str = "FontimizeSubset", verbose : bool = False, print_stats : bool = True, fonts : Collection[str] | str | None = None, addtl_text : str = "", css_rewriter : Callable[[str, str], None] | None = None) -> FontimizeResult:
     if fonts is None:
         fonts = []
     elif isinstance(fonts, str):
@@ -268,10 +383,11 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
     if (len(files) == 0) and len(addtl_text) == 0: # If you specify any text, input files are optional -- note, not documented, used for cmd line app
         print("Error: No input files. Exiting.")
         return {
-            "css" : set(),
-            "fonts" : {},
+            "css": set(),
+            "fonts": {},
             "chars": set(),
-            "uranges": ""
+            "uranges": "",
+            "rewritten_css": {},
         }
 
     text: str = addtl_text
@@ -295,8 +411,11 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
                     href = link['href']
                     if isinstance(href, list):  # BS4 can return a list for multi-valued attributes
                         href = href[0]
-                    if 'css' in href:
-                        adjusted_css_path = _get_path(f, href) # It'll be relative, so relative to the HTML file
+                    # Strip query strings and fragments before checking extension
+                    clean_href: str = href.split('?')[0].split('#')[0]
+                    rel: list[str] = link.get('rel', [])
+                    if clean_href.endswith('.css') or 'stylesheet' in rel:
+                        adjusted_css_path = _get_path(f, clean_href) # It'll be relative, so relative to the HTML file
                         css_files.add(adjusted_css_path)
             else: # not HTML, treat as text
                 text += file.read()
@@ -305,10 +424,11 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
     if len(text) == 0:
         print("Error: No text found in the input files or additional text. Exiting.")
         return {
-            "css" : set(),
-            "fonts" : {},
+            "css": set(),
+            "fonts": {},
             "chars": set(),
-            "uranges": ""
+            "uranges": "",
+            "rewritten_css": {},
         }
 
     # Extract fonts from CSS files
@@ -347,15 +467,33 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
     if len(font_files) == 0:
         print("Error: No fonts found in the input files. Exiting.")
         return {
-            "css" : css_files,
-            "fonts" : {},
+            "css": css_files,
+            "fonts": {},
             "chars": set(),
-            "uranges": ""
+            "uranges": "",
+            "rewritten_css": {},
         }
 
     res: FontimizeResult = optimise_fonts(text, font_files, fontpath=font_output_dir, subsetname=subsetname, verbose=verbose, print_stats=print_stats)
     res["css"] = css_files
-    return res;
+
+    # Rewrite CSS files to reference the generated .woff2 fonts
+    if font_output_dir and css_files:
+        for css_file in css_files:
+            with open(css_file, 'r') as file:
+                css = file.read()
+
+            output_path, rewritten = _rewrite_css(css_file, css, res["fonts"], font_output_dir)
+
+            if css_rewriter is not None:
+                css_rewriter(output_path, rewritten)
+            else:
+                with open(output_path, 'w') as file:
+                    file.write(rewritten)
+
+            res["rewritten_css"][css_file] = output_path
+
+    return res
 
 
 # Note that unit tests for this file are in tests.py; run that file to run the tests
