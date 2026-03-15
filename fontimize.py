@@ -37,6 +37,27 @@ cssutils.log.setLevel(logging.CRITICAL)
 _SUPPORTED_FONT_EXTENSIONS: set[str] = {'.ttf', '.otf', '.woff', '.woff2'}
 
 
+class FontFileStats(TypedDict):
+    """Size statistics for a single font file."""
+    original: str
+    generated: str
+    original_size: int
+    generated_size: int
+
+class FontimizeStats(TypedDict):
+    """Aggregate statistics about the font subsetting operation."""
+    fonts_processed: int
+    files: list[FontFileStats]
+    total_original_size: int
+    total_generated_size: int
+    savings_bytes: int
+    savings_percent: float
+
+def _empty_stats() -> FontimizeStats:
+    """Return a FontimizeStats with all fields zeroed out."""
+    return {"fonts_processed": 0, "files": [], "total_original_size": 0,
+            "total_generated_size": 0, "savings_bytes": 0, "savings_percent": 0.0}
+
 class FontimizeResult(TypedDict):
     """Result dictionary returned by all optimise_fonts* functions."""
     css: set[str]
@@ -44,7 +65,8 @@ class FontimizeResult(TypedDict):
     chars: set[str]
     uranges: str
     rewritten_css: dict[str, str]
-    
+    stats: FontimizeStats
+
 def _get_unicode_string(char : str, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
 
@@ -121,13 +143,6 @@ def _get_char_ranges(chars : list[str]) -> list[charPair]:
 
     return res
 
-# Get the total size of multiple files (used for calculating font file sizes)
-def _get_file_size_sum(files: list[str]) -> int:
-    total = 0
-    for f in files:
-        total = total + path.getsize(f)
-    return total
-    
 # Convert to human-readable size in MB or KB
 def _file_size_to_readable(size : int) -> str:
     return str(round(size / 1024)) + "KB" if size < 1024 * 1024 else str(round(size / (1024 * 1024), 1)) + "MB" # nKB or n.nMB
@@ -144,6 +159,7 @@ def optimise_fonts(text : str, fonts : Collection[str] | str, fontpath : str = "
         "chars": set(),
         "uranges": "",
         "rewritten_css": {},
+        "stats": _empty_stats(),
     }
 
     characters: set[str] = get_used_characters_in_str(text)
@@ -202,23 +218,41 @@ def optimise_fonts(text : str, fonts : Collection[str] | str, fontpath : str = "
         if verbose:
             print(f"  Generated {outfile}")
 
+    # Build structured stats
+    file_stats: list[FontFileStats] = []
+    for original, generated in res["fonts"].items():
+        file_stats.append({
+            "original": original,
+            "generated": generated,
+            "original_size": path.getsize(original),
+            "generated_size": path.getsize(generated),
+        })
+    sum_orig: int = sum(fs["original_size"] for fs in file_stats)
+    sum_new: int = sum(fs["generated_size"] for fs in file_stats)
+    savings: int = sum_orig - sum_new
+    savings_percent: float = (savings / sum_orig * 100) if sum_orig > 0 else 0.0
+    res["stats"] = {
+        "fonts_processed": len(res["fonts"]),
+        "files": file_stats,
+        "total_original_size": sum_orig,
+        "total_generated_size": sum_new,
+        "savings_bytes": savings,
+        "savings_percent": round(savings_percent, 1),
+    }
+
     if verbose or print_stats:
         print("Results:")
-        print("  Fonts processed: " + str(len(res["fonts"])))
+        print("  Fonts processed: " + str(res["stats"]["fonts_processed"]))
         if not verbose: # If verbose, already printed per-font above
             print("  Generated (use verbose output for input -> generated map):")
-            for k in res["fonts"].keys():
-                print("    " + res["fonts"][k])
+            for fs in file_stats:
+                print("    " + fs["generated"])
         else:
             print("  Generated the following fonts from the originals:")
-            for k in res["fonts"].keys():
-                print("    " + k + " -> " + res["fonts"][k])
-        sum_orig: int = _get_file_size_sum(list(res["fonts"].keys()))
-        sum_new: int = _get_file_size_sum(list(res["fonts"].values()))
+            for fs in file_stats:
+                print("    " + fs["original"] + " -> " + fs["generated"])
         print("  Total original font size: " + _file_size_to_readable(sum_orig))
         print("  Total optimised font size: " + _file_size_to_readable(sum_new))
-        savings: int = sum_orig - sum_new
-        savings_percent: float = savings / sum_orig * 100
         print("  Savings: " +  _file_size_to_readable(savings) + " less, which is " + str(round(savings_percent, 1)) + "%!")
         print("Thankyou for using Fontimize!") # A play on Font and Optimise, haha, so good pun clever. But seriously - hopefully a memorable name!
 
@@ -522,6 +556,7 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
             "chars": set(),
             "uranges": "",
             "rewritten_css": {},
+            "stats": _empty_stats(),
         }
 
     text: str = addtl_text
@@ -563,6 +598,7 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
             "chars": set(),
             "uranges": "",
             "rewritten_css": {},
+            "stats": _empty_stats(),
         }
 
     # Extract fonts from CSS files
@@ -583,8 +619,7 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
             if path.isfile(adjusted_font_path):
                 font_files.add(adjusted_font_path)
             else:
-                # if verbose:
-                print("Warning: Font file not found (may be remote not local?); skipping: " + font_url + " (resolved to " + adjusted_font_path + ")")
+                warnings.warn(f"Font file not found (may be remote not local?); skipping: {font_url} (resolved to {adjusted_font_path})")
 
     if verbose:
         print("Found the following CSS files:")
@@ -606,6 +641,7 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
             "chars": set(),
             "uranges": "",
             "rewritten_css": {},
+            "stats": _empty_stats(),
         }
 
     res: FontimizeResult = optimise_fonts(text, font_files, fontpath=font_output_dir, subsetname=subsetname, verbose=verbose, print_stats=print_stats)
@@ -633,51 +669,66 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
 # Note that unit tests for this file are in tests.py; run that file to run the tests
 if __name__ == '__main__':
     import argparse
+    import json
+
     parser = argparse.ArgumentParser(description="Optimize fonts to only the specific glyphs needed for your text or HTML files",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
     fontimize.py 1.html 2.txt
     fontimize.py --outputdir output --subsetname MySubset --verbose 1.html 2.txt
-    fontimize.py --text "The fonts will contain only the glyphs in this string" --fonts "Arial.tff" "Times New Roman.ttf"
+    fontimize.py --text "The fonts will contain only the glyphs in this string" --fonts "Arial.ttf" "Times New Roman.ttf"
+    fontimize.py --json --outputdir output 1.html 2.txt
                 """)
-    
+
     parser.add_argument('inputfiles', default=[], nargs='*', help='Input files to parse: .htm and .html are parsed as HTML to extract used text, all other files are treated as text')
     parser.add_argument('-t', '--text', type=str, help='Input text to parse, specified directly on the command line')
     parser.add_argument('-f', '--fonts', default=[], nargs='*', help='Input font files')
 
     group_output = parser.add_argument_group('Output', 'Specify font output directory and font subset phrase in the generated filenames')
-    group_output.add_argument("-o", "--outputdir", type=str, 
+    group_output.add_argument("-o", "--outputdir", type=str,
                         help="Directory in which to place the generated font files (default is the same directory as the original font files)",
                         default="")
-    group_output.add_argument("-s", "--subsetname", type=str, 
+    group_output.add_argument("-s", "--subsetname", type=str,
                         help="Phrase used in the output font filenames, eg 'Arial.SubsetName.woff2'",
                         default="FontimizeSubset")
-    
+
     group_verb = parser.add_argument_group('Verbosity', 'Control how much Fontimize prints to the console')
     group_verb.add_argument("-v", "--verbose", help="Output significant / diagnostic info about discovered files and fonts, and generated fonts and their glyphs",
                     action="store_true")
     group_verb.add_argument("-n", "--nostats", help="Do not output info about the sizes of the original and generated fonts and the amount of space saved (shown by default)",
                     action="store_true")
+    group_verb.add_argument("--json", help="Print results as JSON to stdout, including any warnings; suppresses all other output",
+                    action="store_true", dest="json_output")
 
     args = parser.parse_args()
+
+    # --json captures warnings into the result and suppresses human-readable output
+    _captured_warnings: list[str] = []
+    if args.json_output:
+        args.nostats = True
+        args.verbose = False
+        # Capture warnings into a list instead of printing to stderr
+        def _warning_handler(message, category, filename, lineno, file=None, line=None):
+            _captured_warnings.append(str(message))
+        warnings.showwarning = _warning_handler
 
     # If both --text and inputfiles are specified, give an error
     if args.text and args.inputfiles:
         print("Error: Both --text and input files cannot be specified at the same time.")
         sys.exit(1)
-     
+
     # If neither --text nor inputfiles are specified, give an error
     if not args.text and not args.inputfiles:
         print("Error: Either --text or input files must be specified.")
         sys.exit(1)
 
-    _addtl_text = ""
+    _addtl_text: str = ""
     if args.text:
         _addtl_text = args.text
 
     # If inputfiles are specified, test they exist
-    _inputfiles = []
+    _inputfiles: list[str] = []
     if args.inputfiles:
         for file in args.inputfiles:
             if not os.path.exists(file):
@@ -686,7 +737,7 @@ Examples:
         _inputfiles = args.inputfiles
 
     # If fonts are specified, test they exist
-    _fonts = []
+    _fonts: list[str] = []
     if args.fonts:
         for file in args.fonts:
             if not os.path.exists(file):
@@ -695,7 +746,7 @@ Examples:
         _fonts = args.fonts
 
     # If outputdir is specified, test it exists
-    _outputdir = ""
+    _outputdir: str = ""
     if args.outputdir:
         if not os.path.exists(args.outputdir):
             print(f"Error: Output directory '{args.outputdir}' does not exist.")
@@ -703,7 +754,7 @@ Examples:
         _outputdir = args.outputdir
 
     # If subsetname is specified, test it's valid
-    _subsetname = ""
+    _subsetname: str = ""
     if args.subsetname:
         try:
             validate_filename(args.subsetname)
@@ -715,18 +766,33 @@ Examples:
     _verbose = False
     if args.verbose:
         _verbose = args.verbose;
-    
+
     _printstats = True
     if args.nostats:
         _printstats = not args.nostats
 
-    res = optimise_fonts_for_files(_inputfiles,
-                                   font_output_dir=_outputdir, 
-                                   subsetname=_subsetname, 
-                                   verbose=_verbose, 
-                                   print_stats=_printstats, 
-                                   fonts=_fonts, 
-                                   addtl_text=_addtl_text)
-    
-    if args.verbose:              
+    res: FontimizeResult = optimise_fonts_for_files(
+        _inputfiles,
+        font_output_dir=_outputdir,
+        subsetname=_subsetname,
+        verbose=_verbose,
+        print_stats=_printstats,
+        fonts=_fonts,
+        addtl_text=_addtl_text,
+        css_rewriter=None,  # CSS rewriting uses the default file-writing behaviour, not a callback
+    )
+
+    if args.json_output:
+        json_result: dict[str, object] = {
+            "css": sorted(res["css"]),
+            "fonts": res["fonts"],
+            "chars": sorted(res["chars"]),
+            "uranges": res["uranges"],
+            "rewritten_css": res["rewritten_css"],
+            "stats": res["stats"],
+            "warnings": _captured_warnings,
+        }
+        print(json.dumps(json_result, indent=2))
+
+    if _verbose:
         print("Done.")

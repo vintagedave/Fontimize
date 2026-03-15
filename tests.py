@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -195,6 +196,37 @@ class TestOptimiseFonts(unittest.TestCase):
         self.assertEqual(2, _count_glyphs_in_font('tests/output/Spirax-Regular.FontimizeSubset.woff2'))
 
 
+class TestOptimiseFontsStats(unittest.TestCase):
+    """Test that stats are populated and that print_stats/verbose exercise the printing code."""
+
+    def test_stats_populated(self) -> None:
+        """Result should contain stats with correct structure and non-zero values."""
+        result = optimise_fonts("Hello World", ['tests/Whisper-Regular.ttf'],
+                                fontpath='tests/output', print_stats=False)
+        stats = result["stats"]
+        self.assertEqual(stats["fonts_processed"], 1)
+        self.assertEqual(len(stats["files"]), 1)
+        self.assertGreater(stats["files"][0]["original_size"], 0)
+        self.assertGreater(stats["files"][0]["generated_size"], 0)
+        self.assertGreater(stats["total_original_size"], 0)
+        self.assertGreater(stats["savings_bytes"], 0)
+        self.assertGreater(stats["savings_percent"], 0)
+
+    @patch('sys.stdout', new_callable=lambda: open(os.devnull, 'w'))
+    def test_print_stats_runs_without_error(self, mock_stdout) -> None:
+        """print_stats=True should print without crashing."""
+        result = optimise_fonts("Hello", ['tests/Whisper-Regular.ttf'],
+                                fontpath='tests/output', print_stats=True, verbose=False)
+        self.assertGreater(result["stats"]["fonts_processed"], 0)
+
+    @patch('sys.stdout', new_callable=lambda: open(os.devnull, 'w'))
+    def test_verbose_runs_without_error(self, mock_stdout) -> None:
+        """verbose=True should print without crashing."""
+        result = optimise_fonts("Hello", ['tests/Whisper-Regular.ttf'],
+                                fontpath='tests/output', print_stats=True, verbose=True)
+        self.assertGreater(result["stats"]["fonts_processed"], 0)
+
+
 class TestOptimiseFontsInputFormats(unittest.TestCase):
     """Test that fontTools handles various input font formats."""
 
@@ -261,16 +293,16 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         # Not used by any HTML/CSS, mimics manually adding a font
         self.fonts = ['tests/Whisper-Regular.ttf', 'tests/NotoSans-VariableFont_wdth,wght.ttf', 'tests/NotoSansJP-VariableFont_wght.ttf']
 
-    @patch.object(sys, 'stdout') # provides mock_stdout in order to hide and verify console output
-    def test_optimise_fonts_for_files(self, mock_stdout):
-        result = optimise_fonts_for_files(files=self.files, font_output_dir=self.font_output_dir, subsetname=self.subsetname, fonts=self.fonts,
-            verbose=False, print_stats=False)
-        
-        # css_test.css has:
-        #   src: url('DOESNOTEXIST.ttf') format('truetype');
-        # This will emit a warning, check it was written to standard output
-        mock_stdout.write.assert_any_call('Warning: Font file not found (may be remote not local?); skipping: DOESNOTEXIST.ttf (resolved to tests/DOESNOTEXIST.ttf)')
-        
+    def test_optimise_fonts_for_files(self):
+        import warnings as w
+        # css_test.css has src: url('DOESNOTEXIST.ttf') — should emit a warning
+        with w.catch_warnings(record=True) as caught:
+            w.simplefilter('always')
+            result = optimise_fonts_for_files(files=self.files, font_output_dir=self.font_output_dir, subsetname=self.subsetname, fonts=self.fonts,
+                verbose=False, print_stats=False)
+        missing_font_warnings = [x for x in caught if 'DOESNOTEXIST.ttf' in str(x.message)]
+        self.assertEqual(len(missing_font_warnings), 1)
+
         self.assertIsInstance(result, dict)
         self.assertIn('css', result)
         self.assertIn('fonts', result)
@@ -678,6 +710,143 @@ class TestBeartypeValidation(unittest.TestCase):
         from beartype.roar import BeartypeCallHintParamViolation
         with self.assertRaises(BeartypeCallHintParamViolation):
             optimise_fonts_for_files("not a list")  # type: ignore[arg-type]
+
+
+class TestCLI(unittest.TestCase):
+    """Integration tests that invoke fontimize.py as a subprocess."""
+
+    def _run(self, *args: str, expect_returncode: int = 0) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            [sys.executable, 'fontimize.py'] + list(args),
+            capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        self.assertEqual(result.returncode, expect_returncode,
+                         f"Expected return code {expect_returncode}, got {result.returncode}\n"
+                         f"stdout: {result.stdout}\nstderr: {result.stderr}")
+        return result
+
+    def test_no_args_exits_with_error(self) -> None:
+        """Running with no arguments should exit with code 1."""
+        result = self._run(expect_returncode=1)
+        self.assertIn('Error', result.stdout)
+
+    def test_basic_run_prints_stats(self) -> None:
+        """Default run should print stats including savings."""
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output')
+        self.assertIn('Savings', result.stdout)
+        self.assertIn('Thankyou for using Fontimize', result.stdout)
+
+    def test_nostats_suppresses_summary(self) -> None:
+        """--nostats should suppress the stats summary."""
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '-n')
+        self.assertNotIn('Savings', result.stdout)
+        self.assertNotIn('Thankyou for using Fontimize', result.stdout)
+
+    def test_json_output(self) -> None:
+        """--json should produce valid JSON with the expected keys."""
+        import json
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json')
+        data = json.loads(result.stdout)
+        self.assertIsInstance(data['css'], list)
+        self.assertIsInstance(data['fonts'], dict)
+        self.assertIsInstance(data['chars'], list)
+        self.assertIsInstance(data['uranges'], str)
+        self.assertIsInstance(data['warnings'], list)
+        # chars should be sorted strings
+        self.assertEqual(data['chars'], sorted(data['chars']))
+
+    def test_json_includes_stats(self) -> None:
+        """--json should include structured stats with file sizes and savings."""
+        import json
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json')
+        data = json.loads(result.stdout)
+        stats = data['stats']
+        self.assertGreater(stats['fonts_processed'], 0)
+        self.assertIsInstance(stats['files'], list)
+        self.assertGreater(len(stats['files']), 0)
+        # Each file entry has the expected keys
+        for f in stats['files']:
+            self.assertIn('original', f)
+            self.assertIn('generated', f)
+            self.assertIn('original_size', f)
+            self.assertIn('generated_size', f)
+            self.assertGreater(f['original_size'], 0)
+            self.assertGreater(f['generated_size'], 0)
+        self.assertGreater(stats['total_original_size'], 0)
+        self.assertGreater(stats['total_generated_size'], 0)
+        self.assertGreater(stats['savings_bytes'], 0)
+        self.assertGreater(stats['savings_percent'], 0)
+
+    def test_json_suppresses_verbose(self) -> None:
+        """--json should suppress verbose output even if -v is also given."""
+        import json
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json', '-v')
+        # No human-readable output
+        self.assertNotIn('Characters:', result.stdout)
+        self.assertNotIn('Savings', result.stdout)
+        # stdout should be valid JSON only
+        data = json.loads(result.stdout)
+        self.assertIn('fonts', data)
+
+    def test_verbose_prints_details(self) -> None:
+        """--verbose should print character and font details."""
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '-v')
+        self.assertIn('Characters:', result.stdout)
+        self.assertIn('Unicode ranges:', result.stdout)
+        self.assertIn('Done.', result.stdout)
+
+    def test_outputdir_rewrites_css(self) -> None:
+        """--outputdir should produce rewritten CSS files alongside the fonts."""
+        import json
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output',
+                           '--json')
+        data = json.loads(result.stdout)
+        self.assertGreater(len(data['rewritten_css']), 0)
+        # Check the rewritten CSS files exist on disk
+        for original, rewritten_path in data['rewritten_css'].items():
+            self.assertTrue(os.path.exists(rewritten_path),
+                            f"Rewritten CSS not found: {rewritten_path}")
+
+    def test_text_mode(self) -> None:
+        """--text with --fonts should work without input files."""
+        result = self._run('-t', 'Hello World', '-f', 'tests/Whisper-Regular.ttf',
+                           '-o', 'tests/output', '--json')
+        import json
+        data = json.loads(result.stdout)
+        self.assertIn('tests/Whisper-Regular.ttf', data['fonts'])
+
+    def test_json_captures_warnings(self) -> None:
+        """--json should capture warnings in the JSON output, not on stderr."""
+        import json
+        # Running twice with same outputdir means second run warns about existing files
+        self._run('tests/test1-index-css.html', '-o', 'tests/output', '-n')
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json')
+        data = json.loads(result.stdout)
+        self.assertIsInstance(data['warnings'], list)
+        # Warnings are in the JSON, not on stderr
+        self.assertEqual(result.stderr, '')
+        # Should have at least one "already exists" warning from the second run
+        self.assertTrue(any('already exists' in w for w in data['warnings']),
+                        f"Expected overwrite warning in JSON, got: {data['warnings']}")
+
+    def test_json_no_stderr(self) -> None:
+        """--json should never write to stderr — all output goes to stdout as JSON."""
+        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json')
+        self.assertEqual(result.stderr, '')
+
+    def test_text_and_files_conflict(self) -> None:
+        """Specifying both --text and input files should error."""
+        result = self._run('-t', 'Hello', 'tests/test1-index-css.html', expect_returncode=1)
+        self.assertIn('Error', result.stdout)
+
+    def test_missing_input_file(self) -> None:
+        """A non-existent input file should exit with code 1."""
+        result = self._run('nonexistent.html', expect_returncode=1)
+        self.assertIn('does not exist', result.stdout)
+
+    def test_exit_code_zero_on_success(self) -> None:
+        """Successful run should exit with code 0."""
+        self._run('tests/test1-index-css.html', '-o', 'tests/output', '-n')
 
 
 if __name__ == '__main__':
