@@ -1,6 +1,6 @@
 [project]
 name = "fontimize"
-version = "0.8.9"
+version = "0.9.0"
 authors = [
   { name="David Millington", email="vintagedave@gmail.com" },
 ]
