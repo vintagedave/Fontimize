@@ -89,7 +89,7 @@ class TestCharRangesMatchCharacters(unittest.TestCase):
     def _assert_ranges_match_chars(self, text: str) -> None:
         """Helper: check that chars and uranges from optimise_fonts contain identical codepoints."""
         result = optimise_fonts(text, ['tests/Spirax-Regular.ttf'],
-                                fontpath='tests/output', print_stats=False)
+                                fontpath=self._test_output_dir, print_stats=False)
         chars_codepoints: set[int] = {ord(c) for c in result["chars"]}
         ranges_codepoints: set[int] = _uranges_str_to_codepoints(result["uranges"])
         self.assertEqual(chars_codepoints, ranges_codepoints,
@@ -149,14 +149,19 @@ class TestOptimiseFonts(unittest.TestCase):
     # Contains unique characters, none repeated, a couple of capitals, some symbols, and 26 lowercase
     test_string = " ,.@QT_abcdefghijklmnopqrstuvwxyz"
 
+    def _expected(self, font_basename: str, subsetname: str = 'FontimizeSubset') -> str:
+        """Build expected output path for this test's output dir."""
+        stem = os.path.splitext(font_basename)[0]
+        return os.path.join(self._test_output_dir, f'{stem}.{subsetname}.woff2')
+
     def test_optimise_fonts_with_single_font(self) -> None:
-        result = optimise_fonts(self.test_string, ['tests/Spirax-Regular.ttf'], fontpath='tests/output', verbose=False, print_stats=False)
+        result = optimise_fonts(self.test_string, ['tests/Spirax-Regular.ttf'], fontpath=self._test_output_dir, verbose=False, print_stats=False)
         # Basics
         self.assertIsInstance(result, dict)
         foundfonts = result["fonts"]
         self.assertIn('tests/Spirax-Regular.ttf', foundfonts)
         # Generated with the right name
-        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
+        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], self._expected('Spirax-Regular.ttf'))
         # If the number of glyphs in the font matches the expected number
         # For +1, see test_optimise_fonts_with_empty_text
         self.assertEqual(len(self.test_string) + 1, _count_glyphs_in_font(foundfonts['tests/Spirax-Regular.ttf']))
@@ -164,36 +169,36 @@ class TestOptimiseFonts(unittest.TestCase):
     def test_optimise_fonts_with_multiple_fonts(self) -> None:
         result = optimise_fonts(self.test_string,
             ['tests/Spirax-Regular.ttf', 'tests/EBGaramond-VariableFont_wght.ttf', 'tests/EBGaramond-Italic-VariableFont_wght.ttf'],
-            fontpath='tests/output', verbose=False, print_stats=False)
+            fontpath=self._test_output_dir, verbose=False, print_stats=False)
         self.assertIsInstance(result, dict)
         foundfonts = result["fonts"]
         self.assertIn('tests/Spirax-Regular.ttf', foundfonts)
-        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
+        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], self._expected('Spirax-Regular.ttf'))
         self.assertIn('tests/EBGaramond-VariableFont_wght.ttf', foundfonts)
-        self.assertEqual(foundfonts['tests/EBGaramond-VariableFont_wght.ttf'], 'tests/output/EBGaramond-VariableFont_wght.FontimizeSubset.woff2')
+        self.assertEqual(foundfonts['tests/EBGaramond-VariableFont_wght.ttf'], self._expected('EBGaramond-VariableFont_wght.ttf'))
         self.assertIn('tests/EBGaramond-Italic-VariableFont_wght.ttf', foundfonts)
-        self.assertEqual(foundfonts['tests/EBGaramond-Italic-VariableFont_wght.ttf'], 'tests/output/EBGaramond-Italic-VariableFont_wght.FontimizeSubset.woff2')
+        self.assertEqual(foundfonts['tests/EBGaramond-Italic-VariableFont_wght.ttf'], self._expected('EBGaramond-Italic-VariableFont_wght.ttf'))
         # If the number of glyphs in the font matches the expected number
         # + 1 for the tests below -- see test_optimise_fonts_with_empty_text
-        self.assertEqual(len(self.test_string) + 1, _count_glyphs_in_font('tests/output/Spirax-Regular.FontimizeSubset.woff2'))
+        self.assertEqual(len(self.test_string) + 1, _count_glyphs_in_font(foundfonts['tests/Spirax-Regular.ttf']))
         # + 16, + 12: EB Garamond contains multiple f-ligatures (eg fi), plus other variants, so the number of glyphs is higher. Italic has fewer.
-        self.assertEqual(len(self.test_string) + 1 + 16, _count_glyphs_in_font('tests/output/EBGaramond-VariableFont_wght.FontimizeSubset.woff2'))
-        self.assertEqual(len(self.test_string) + 1 + 12, _count_glyphs_in_font('tests/output/EBGaramond-Italic-VariableFont_wght.FontimizeSubset.woff2'))
+        self.assertEqual(len(self.test_string) + 1 + 16, _count_glyphs_in_font(foundfonts['tests/EBGaramond-VariableFont_wght.ttf']))
+        self.assertEqual(len(self.test_string) + 1 + 12, _count_glyphs_in_font(foundfonts['tests/EBGaramond-Italic-VariableFont_wght.ttf']))
 
     def test_optimise_fonts_with_empty_text(self) -> None:
         result = optimise_fonts("",
             ['tests/Spirax-Regular.ttf'],
-            fontpath='tests/output',
+            fontpath=self._test_output_dir,
             verbose=False, print_stats=False)
         self.assertIsInstance(result, dict)
         foundfonts = result["fonts"]
         self.assertIn('tests/Spirax-Regular.ttf', foundfonts)
-        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], 'tests/output/Spirax-Regular.FontimizeSubset.woff2')
+        self.assertEqual(foundfonts['tests/Spirax-Regular.ttf'], self._expected('Spirax-Regular.ttf'))
         # If the number of glyphs in the font matches the expected number: two, because an empty string is reported as containing space, see get_used_characters_in_str
         # and fonts also seem to contain ".notdef":
         #   > font.getGlyphOrder()
         #   > ['.notdef', 'space']
-        self.assertEqual(2, _count_glyphs_in_font('tests/output/Spirax-Regular.FontimizeSubset.woff2'))
+        self.assertEqual(2, _count_glyphs_in_font(foundfonts['tests/Spirax-Regular.ttf']))
 
 
 class TestOptimiseFontsStats(unittest.TestCase):
@@ -202,7 +207,7 @@ class TestOptimiseFontsStats(unittest.TestCase):
     def test_stats_populated(self) -> None:
         """Result should contain stats with correct structure and non-zero values."""
         result = optimise_fonts("Hello World", ['tests/Whisper-Regular.ttf'],
-                                fontpath='tests/output', print_stats=False)
+                                fontpath=self._test_output_dir, print_stats=False)
         stats = result["stats"]
         self.assertEqual(stats["fonts_processed"], 1)
         self.assertEqual(len(stats["files"]), 1)
@@ -216,14 +221,14 @@ class TestOptimiseFontsStats(unittest.TestCase):
     def test_print_stats_runs_without_error(self, mock_stdout: object) -> None:
         """print_stats=True should print without crashing."""
         result = optimise_fonts("Hello", ['tests/Whisper-Regular.ttf'],
-                                fontpath='tests/output', print_stats=True, verbose=False)
+                                fontpath=self._test_output_dir, print_stats=True, verbose=False)
         self.assertGreater(result["stats"]["fonts_processed"], 0)
 
     @patch('sys.stdout', new_callable=lambda: open(os.devnull, 'w'))
     def test_verbose_runs_without_error(self, mock_stdout: object) -> None:
         """verbose=True should print without crashing."""
         result = optimise_fonts("Hello", ['tests/Whisper-Regular.ttf'],
-                                fontpath='tests/output', print_stats=True, verbose=True)
+                                fontpath=self._test_output_dir, print_stats=True, verbose=True)
         self.assertGreater(result["stats"]["fonts_processed"], 0)
 
 
@@ -234,13 +239,13 @@ class TestOptimiseFontsInputFormats(unittest.TestCase):
         """WOFF2 files can be used as input and re-subset to a new WOFF2."""
         # First generate a WOFF2 from a TTF so we have a known input
         result1 = optimise_fonts("Hello", ['tests/Whisper-Regular.ttf'],
-                                 fontpath='tests/output', subsetname='Stage1', print_stats=False)
+                                 fontpath=self._test_output_dir, subsetname='Stage1', print_stats=False)
         woff2_input: str = result1["fonts"]['tests/Whisper-Regular.ttf']
         self.assertTrue(woff2_input.endswith('.woff2'))
 
         # Now use that WOFF2 as input
         result2 = optimise_fonts("He", [woff2_input],
-                                 fontpath='tests/output', subsetname='Stage2', print_stats=False)
+                                 fontpath=self._test_output_dir, subsetname='Stage2', print_stats=False)
         woff2_output: str = result2["fonts"][woff2_input]
         self.assertTrue(os.path.exists(woff2_output))
         # Fewer characters requested, so the re-subset should have fewer glyphs
@@ -259,7 +264,7 @@ class TestOptimiseFontsInputFormats(unittest.TestCase):
             with w.catch_warnings(record=True) as caught:
                 w.simplefilter('always')
                 try:
-                    optimise_fonts("x", [dummy_path], fontpath='tests/output', print_stats=False)
+                    optimise_fonts("x", [dummy_path], fontpath=self._test_output_dir, print_stats=False)
                 except Exception:
                     pass  # fontTools will fail to parse the dummy file; we only care about the warning
             format_warnings = [x for x in caught if "Unrecognised font format" in str(x.message)]
@@ -273,11 +278,11 @@ class TestOptimiseFontsInputFormats(unittest.TestCase):
         import warnings as w
         # Run twice to the same output — second run should warn
         optimise_fonts("Hi", ['tests/Whisper-Regular.ttf'],
-                       fontpath='tests/output', subsetname='OverwriteTest', print_stats=False)
+                       fontpath=self._test_output_dir, subsetname='OverwriteTest', print_stats=False)
         with w.catch_warnings(record=True) as caught:
             w.simplefilter('always')
             optimise_fonts("Hi", ['tests/Whisper-Regular.ttf'],
-                           fontpath='tests/output', subsetname='OverwriteTest', print_stats=False)
+                           fontpath=self._test_output_dir, subsetname='OverwriteTest', print_stats=False)
         overwrite_warnings = [x for x in caught if "already exists" in str(x.message)]
         self.assertEqual(len(overwrite_warnings), 1)
 
@@ -286,7 +291,7 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
 
     def setUp(self) -> None:
         self.files = ['tests/test1-index-css.html', 'tests/test.txt', 'tests/test2.html']
-        self.font_output_dir = 'tests/output'
+        self.font_output_dir = self._test_output_dir
         self.subsetname = 'TestFilesSubset'
         self.verbose = False
         self.print_stats = False
@@ -325,49 +330,53 @@ class TestOptimiseFontsForFiles(unittest.TestCase):
         self.assertIn('tests/NotoSans-VariableFont_wdth,wght.ttf', font_keys) 
         self.assertIn('tests/NotoSansJP-VariableFont_wght.ttf', font_keys) 
 
+        def _out(font_basename: str) -> str:
+            stem = os.path.splitext(font_basename)[0]
+            return os.path.join(self.font_output_dir, f'{stem}.{self.subsetname}.woff2')
+
         self.maxDiff = None # See full results of below comparison
-        self.assertDictEqual(fonts, 
+        self.assertDictEqual(fonts,
                              {
-                                 'tests/Spirax-Regular.ttf': 'tests/output/Spirax-Regular.TestFilesSubset.woff2',
-                                 'tests/SortsMillGoudy-Italic.ttf': 'tests/output/SortsMillGoudy-Italic.TestFilesSubset.woff2',
-                                 'tests/SortsMillGoudy-Regular.ttf': 'tests/output/SortsMillGoudy-Regular.TestFilesSubset.woff2',
-                                 'tests/NotoSansJP-VariableFont_wght.ttf': 'tests/output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2',
-                                 'tests/Whisper-Regular.ttf': 'tests/output/Whisper-Regular.TestFilesSubset.woff2',
-                                 'tests/NotoSans-VariableFont_wdth,wght.ttf': 'tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2',
-                                 'tests/EBGaramond-VariableFont_wght.ttf': 'tests/output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'
+                                 'tests/Spirax-Regular.ttf': _out('Spirax-Regular.ttf'),
+                                 'tests/SortsMillGoudy-Italic.ttf': _out('SortsMillGoudy-Italic.ttf'),
+                                 'tests/SortsMillGoudy-Regular.ttf': _out('SortsMillGoudy-Regular.ttf'),
+                                 'tests/NotoSansJP-VariableFont_wght.ttf': _out('NotoSansJP-VariableFont_wght.ttf'),
+                                 'tests/Whisper-Regular.ttf': _out('Whisper-Regular.ttf'),
+                                 'tests/NotoSans-VariableFont_wdth,wght.ttf': _out('NotoSans-VariableFont_wdth,wght.ttf'),
+                                 'tests/EBGaramond-VariableFont_wght.ttf': _out('EBGaramond-VariableFont_wght.ttf')
                              }
                             )
-        
+
         # Do the output fonts exist on disk?
         for filepath in fonts.values():
             abspath = os.path.abspath(filepath)
             print(f"Checking {filepath} as {abspath}")
             self.assertTrue(os.path.exists(filepath), f"Output font {filepath} does not exist")
             self.assertTrue(os.path.exists(abspath), f"Output font {abspath} does not exist (absolute path)")
-        
+
         # Check glyph counts (+1 is ".notdef", present in all fonts)
         # space and '(),-.:;? (=10 with space) and 0123479 (=7) and A-Z (minus BFILRYZ, =19) and a-z (minus z, =25) and acircumflex and ecircumflex = 2
         # Becaue of ', the curled left adn right quotes are added; because of -, en- and em-dashes are added, thus +4
         # Note that test.txt contains Kanji, Hindi and Vietnamese. Kanji and Hindi are not in the Spirax input font, but the circumflexes come from Vietnamese support.
-        self.assertEqual(10 + 7 + 19 + 25 + 2 + 4 + 1, _count_glyphs_in_font('tests/output/Spirax-Regular.TestFilesSubset.woff2'))
+        self.assertEqual(10 + 7 + 19 + 25 + 2 + 4 + 1, _count_glyphs_in_font(_out('Spirax-Regular.ttf')))
         # EB Garamond contains many more glyphs
-        self.assertEqual(115, _count_glyphs_in_font('tests/output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2'))
+        self.assertEqual(115, _count_glyphs_in_font(_out('EBGaramond-VariableFont_wght.ttf')))
 
         # Check specific characters are present
         # U+1EE5 is "u with dot below", ụ, which is in test.txt - Vietnamese
-        self.assertTrue(_font_contains('tests/output/EBGaramond-VariableFont_wght.TestFilesSubset.woff2', 'uni1EE5'))
+        self.assertTrue(_font_contains(_out('EBGaramond-VariableFont_wght.ttf'), 'uni1EE5'))
         # Kanji
-        self.assertTrue(_font_contains('tests/output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2', 'uni6F22'))
-        self.assertTrue(_font_contains('tests/output/NotoSansJP-VariableFont_wght.TestFilesSubset.woff2', 'uni5B57'))
+        self.assertTrue(_font_contains(_out('NotoSansJP-VariableFont_wght.ttf'), 'uni6F22'))
+        self.assertTrue(_font_contains(_out('NotoSansJP-VariableFont_wght.ttf'), 'uni5B57'))
         # The above is the Japanese version: Noto Sans JP. The other Noto Sans font does not support Kanji
         # so as a sanity check, verify the glyphs are not there
-        self.assertFalse(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni6F22'))
-        self.assertFalse(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni5B57'))
+        self.assertFalse(_font_contains(_out('NotoSans-VariableFont_wdth,wght.ttf'), 'uni6F22'))
+        self.assertFalse(_font_contains(_out('NotoSans-VariableFont_wdth,wght.ttf'), 'uni5B57'))
         # Devangari (Hindi)
         # Supported by Noto Sans
-        self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0906')) # char 1 in text.txt
-        self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0927')) # char 2 (part) in text.txt
-        self.assertTrue(_font_contains('tests/output/NotoSans-VariableFont_wdth,wght.TestFilesSubset.woff2', 'uni0941')) # char 2 (part) in text.txt
+        self.assertTrue(_font_contains(_out('NotoSans-VariableFont_wdth,wght.ttf'), 'uni0906')) # char 1 in text.txt
+        self.assertTrue(_font_contains(_out('NotoSans-VariableFont_wdth,wght.ttf'), 'uni0927')) # char 2 (part) in text.txt
+        self.assertTrue(_font_contains(_out('NotoSans-VariableFont_wdth,wght.ttf'), 'uni0941')) # char 2 (part) in text.txt
         # Could check that glyphs (in general) are _not_ present, but the count check above does that
 
 class TestFindFontFaceUrls(unittest.TestCase):
@@ -572,31 +581,109 @@ class TestCssDetection(unittest.TestCase):
 
     def test_css_href_detected(self) -> None:
         """A .css href should be recognized and parsed."""
+        import warnings as w
         tmpfile: str = self._make_temp_html('css_test.css')
-        result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+        with w.catch_warnings(record=True) as caught:
+            w.simplefilter('always')
+            result = optimise_fonts_for_files([tmpfile], font_output_dir=self._test_output_dir,
+                                             fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
         expected_css: str = os.path.join(os.path.dirname(tmpfile), 'css_test.css')
         self.assertIn(expected_css, result['css'])
+        # css_test.css references DOESNOTEXIST.ttf — expect that warning
+        missing_font_warnings = [x for x in caught if 'DOESNOTEXIST.ttf' in str(x.message)]
+        self.assertGreater(len(missing_font_warnings), 0)
 
     def test_non_css_file_not_detected(self) -> None:
         """An HTML file whose name happens to contain 'css' (not_a_css_file.html)
         should not be mistaken for a stylesheet.
         (The file exists on disk so the test fails cleanly on the assertion,
         not on a FileNotFoundError.)"""
+        import warnings as w
         tmpfile: str = self._make_temp_html('not_a_css_file.html')
-        result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+        with w.catch_warnings(record=True) as caught:
+            w.simplefilter('always')
+            result = optimise_fonts_for_files([tmpfile], font_output_dir=self._test_output_dir,
+                                             fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
         css_basenames: list[str] = [os.path.basename(p) for p in result['css']]
         self.assertNotIn('not_a_css_file.html', css_basenames)
 
     def test_css_href_with_query_string(self) -> None:
         """css_test.css?v=123 should be resolved to css_test.css — the query string
         must be stripped before looking up the file."""
+        import warnings as w
         tmpfile: str = self._make_temp_html('css_test.css?v=123')
-        result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+        with w.catch_warnings(record=True) as caught:
+            w.simplefilter('always')
+            result = optimise_fonts_for_files([tmpfile], font_output_dir=self._test_output_dir,
+                                             fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
         css_paths: set[str] = result['css']
         for p in css_paths:
             self.assertNotIn('?', p, f"Query string not stripped from CSS path: {p}")
         css_basenames: list[str] = [os.path.basename(p) for p in css_paths]
         self.assertIn('css_test.css', css_basenames)
+        # css_test.css references DOESNOTEXIST.ttf — expect that warning
+        missing_font_warnings = [x for x in caught if 'DOESNOTEXIST.ttf' in str(x.message)]
+        self.assertGreater(len(missing_font_warnings), 0)
+
+
+class TestMultipleCssSameFont(unittest.TestCase):
+    """Two CSS files referencing the same font should produce exactly one subset, no overwrite."""
+
+    def _make_html(self, css_hrefs: list[str]) -> str:
+        """Create a temp HTML file linking multiple CSS files."""
+        links: str = "\n".join(f'<link rel="stylesheet" href="{h}">' for h in css_hrefs)
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, dir='tests')
+        f.write(f'<html><head>{links}</head><body>Hello world</body></html>')
+        f.flush()
+        f.close()
+        return f.name
+
+    def test_shared_font_subset_once(self) -> None:
+        """Two CSS files both referencing Spirax-Regular.ttf should produce one subset
+        containing characters from the HTML AND both CSS files' pseudo-elements."""
+        import warnings as w
+        tmphtml: str = self._make_html(['css_test.css', 'css_shared_font.css'])
+        try:
+            with w.catch_warnings(record=True) as caught:
+                w.simplefilter('always')
+                result = optimise_fonts_for_files([tmphtml], font_output_dir=self._test_output_dir,
+                                                 print_stats=False)
+            # Spirax-Regular.ttf should appear exactly once in the fonts dict
+            spirax_entries = [k for k in result['fonts'] if 'Spirax' in k]
+            self.assertEqual(len(spirax_entries), 1, f"Expected one Spirax entry, got: {spirax_entries}")
+
+            # No overwrite warnings — proves the font was written only once
+            overwrite_warnings = [x for x in caught if 'overwrite' in str(x.message).lower()]
+            self.assertEqual(len(overwrite_warnings), 0,
+                             f"Unexpected overwrite warnings: {[str(x.message) for x in overwrite_warnings]}")
+
+            # Both CSS files should be in the result
+            css_basenames: list[str] = [os.path.basename(p) for p in result['css']]
+            self.assertIn('css_test.css', css_basenames)
+            self.assertIn('css_shared_font.css', css_basenames)
+
+            # The character set should include contributions from all three sources:
+            chars: set[str] = result['chars']
+            # From the HTML body text ("Hello world")
+            for ch in 'Helo wrd':
+                self.assertIn(ch, chars, f"HTML character '{ch}' missing from chars")
+            # From css_test.css pseudo-elements: cite:before " ⸺ " and ul li:before "▸"
+            self.assertIn('\u2E3A', chars, "Two-em-dash from css_test.css :before missing")
+            self.assertIn('\u25B8', chars, "Triangle from css_test.css :before missing")
+            # From css_shared_font.css pseudo-element: .dropcap::after "♠"
+            self.assertIn('\u2660', chars, "Spade from css_shared_font.css ::after missing")
+
+            # The subset font file should exist and contain glyphs for characters Spirax supports
+            spirax_output: str = result['fonts'][spirax_entries[0]]
+            self.assertTrue(os.path.exists(spirax_output))
+            font = TTFont(spirax_output)
+            cmap: dict[int, str] = font.getBestCmap()
+            font.close()
+            # ASCII characters from the HTML text must be in the font
+            for ch in 'Helo wrd':
+                self.assertIn(ord(ch), cmap, f"Glyph for '{ch}' missing from subset font")
+        finally:
+            os.unlink(tmphtml)
 
 
 class TestRewriteCss(unittest.TestCase):
@@ -659,22 +746,25 @@ class TestRewriteCss(unittest.TestCase):
     def test_rewritten_css_key_in_result(self) -> None:
         """optimise_fonts_for_files should include 'rewritten_css' in the result."""
         result = optimise_fonts(
-            "hello", ['tests/Spirax-Regular.ttf'], fontpath='tests/output', print_stats=False
+            "hello", ['tests/Spirax-Regular.ttf'], fontpath=self._test_output_dir, print_stats=False
         )
         self.assertIn('rewritten_css', result)
         self.assertIsInstance(result['rewritten_css'], dict)
 
     def test_css_rewriter_callback_called(self) -> None:
         """When css_rewriter is provided, it should be called instead of writing to disk."""
+        import warnings as w
         captured: list[tuple[str, str]] = []
         def capture(path: str, content: str) -> None:
             captured.append((path, content))
 
         files: list[str] = ['tests/test2.html']
-        result = optimise_fonts_for_files(
-            files, font_output_dir='tests/output', fonts=['tests/Spirax-Regular.ttf'],
-            print_stats=False, css_rewriter=capture
-        )
+        with w.catch_warnings(record=True):
+            w.simplefilter('always')
+            result = optimise_fonts_for_files(
+                files, font_output_dir=self._test_output_dir,
+                fonts=['tests/Spirax-Regular.ttf'], print_stats=False, css_rewriter=capture
+            )
         # test2.html references css_test.css which has @font-face rules
         if result['css']:
             self.assertGreater(len(captured), 0)
@@ -703,7 +793,7 @@ class TestBeartypeValidation(unittest.TestCase):
 
     def test_optimise_fonts_accepts_single_string_font(self) -> None:
         """A single font path as a string should be treated as one font, not iterated by character."""
-        result = optimise_fonts("hello", "tests/Whisper-Regular.ttf", print_stats=False)
+        result = optimise_fonts("hello", "tests/Whisper-Regular.ttf", fontpath=self._test_output_dir, print_stats=False)
         self.assertEqual(len(result["fonts"]), 1)
 
     def test_optimise_fonts_for_files_rejects_non_list_files(self) -> None:
@@ -757,20 +847,20 @@ class TestCLI(unittest.TestCase):
 
     def test_basic_run_prints_stats(self) -> None:
         """Default run should print stats including savings."""
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output')
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir)
         self.assertIn('Savings', result.stdout)
         self.assertIn('Thankyou for using Fontimize', result.stdout)
 
     def test_nostats_suppresses_summary(self) -> None:
         """--nostats should suppress the stats summary."""
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '-n')
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '-n')
         self.assertNotIn('Savings', result.stdout)
         self.assertNotIn('Thankyou for using Fontimize', result.stdout)
 
     def test_json_output(self) -> None:
         """--json should produce valid JSON with the expected keys."""
         import json
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json')
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '--json')
         data = json.loads(result.stdout)
         self.assertIsInstance(data['css'], list)
         self.assertIsInstance(data['fonts'], dict)
@@ -783,7 +873,7 @@ class TestCLI(unittest.TestCase):
     def test_json_includes_stats(self) -> None:
         """--json should include structured stats with file sizes and savings."""
         import json
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json')
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '--json')
         data = json.loads(result.stdout)
         stats = data['stats']
         self.assertGreater(stats['fonts_processed'], 0)
@@ -805,7 +895,7 @@ class TestCLI(unittest.TestCase):
     def test_json_suppresses_verbose(self) -> None:
         """--json should suppress verbose output even if -v is also given."""
         import json
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json', '-v')
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '--json', '-v')
         # No human-readable output
         self.assertNotIn('Characters:', result.stdout)
         self.assertNotIn('Savings', result.stdout)
@@ -815,7 +905,7 @@ class TestCLI(unittest.TestCase):
 
     def test_verbose_prints_details(self) -> None:
         """--verbose should print character and font details."""
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '-v')
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '-v')
         self.assertIn('Characters:', result.stdout)
         self.assertIn('Unicode ranges:', result.stdout)
         self.assertIn('Done.', result.stdout)
@@ -823,7 +913,7 @@ class TestCLI(unittest.TestCase):
     def test_outputdir_rewrites_css(self) -> None:
         """--outputdir should produce rewritten CSS files alongside the fonts."""
         import json
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output',
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir,
                            '--json')
         data = json.loads(result.stdout)
         self.assertGreater(len(data['rewritten_css']), 0)
@@ -835,7 +925,7 @@ class TestCLI(unittest.TestCase):
     def test_text_mode(self) -> None:
         """--text with --fonts should work without input files."""
         result = self._run('-t', 'Hello World', '-f', 'tests/Whisper-Regular.ttf',
-                           '-o', 'tests/output', '--json')
+                           '-o', self._test_output_dir, '--json')
         import json
         data = json.loads(result.stdout)
         self.assertIn('tests/Whisper-Regular.ttf', data['fonts'])
@@ -844,8 +934,8 @@ class TestCLI(unittest.TestCase):
         """--json should capture warnings in the JSON output, not on stderr."""
         import json
         # Running twice with same outputdir means second run warns about existing files
-        self._run('tests/test1-index-css.html', '-o', 'tests/output', '-n')
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json')
+        self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '-n')
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '--json')
         data = json.loads(result.stdout)
         self.assertIsInstance(data['warnings'], list)
         # Warnings are in the JSON, not on stderr
@@ -856,7 +946,7 @@ class TestCLI(unittest.TestCase):
 
     def test_json_no_stderr(self) -> None:
         """--json should never write to stderr — all output goes to stdout as JSON."""
-        result = self._run('tests/test1-index-css.html', '-o', 'tests/output', '--json')
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '--json')
         self.assertEqual(result.stderr, '')
 
     def test_text_and_files_conflict(self) -> None:
@@ -869,9 +959,15 @@ class TestCLI(unittest.TestCase):
         result = self._run('nonexistent.html', expect_returncode=1)
         self.assertIn('does not exist', result.stdout)
 
+    def test_warnings_written_to_stderr(self) -> None:
+        """Without --json, warnings.warn() output should appear on stderr."""
+        # css_test.css references DOESNOTEXIST.ttf, which triggers a "Font file not found" warning
+        result = self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '-n')
+        self.assertIn('DOESNOTEXIST.ttf', result.stderr)
+
     def test_exit_code_zero_on_success(self) -> None:
         """Successful run should exit with code 0."""
-        self._run('tests/test1-index-css.html', '-o', 'tests/output', '-n')
+        self._run('tests/test1-index-css.html', '-o', self._test_output_dir, '-n')
 
 
 if __name__ == '__main__':

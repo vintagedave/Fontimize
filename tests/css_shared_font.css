@@ -1,0 +1,20 @@
+/*
+    A second CSS file that references the same font as css_test.css (Spirax-Regular.ttf).
+    Used to test that two CSS files sharing a font produce only one subset.
+*/
+
+@font-face {
+    font-family: 'dropcap-alt';
+	src: url('Spirax-Regular.ttf') format('truetype');
+	font-weight: bold;
+	font-style: normal;
+}
+
+.dropcap {
+    font-family: dropcap-alt;
+    font-size: 3em;
+}
+
+.dropcap::after {
+    content: "\2660";
+}
