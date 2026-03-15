@@ -64,6 +64,68 @@ class TestCharRanges(unittest.TestCase):
         self.assertEqual(_get_char_ranges(['a', 'b', 'd', 'e', 'f', 'h']), [charPair('a', 'b'), charPair('d', 'f'), charPair('h', 'h')])
 
 
+def _uranges_str_to_codepoints(uranges_str: str) -> set[int]:
+    """Parse a unicode ranges string like 'U+0041-005A, U+0061' back into a set of codepoints."""
+    codepoints: set[int] = set()
+    for part in uranges_str.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            start_str, end_str = part.split('-')
+            start: int = int(start_str.replace('U+', ''), 16)
+            end: int = int(end_str, 16)
+            for cp in range(start, end + 1):
+                codepoints.add(cp)
+        else:
+            codepoints.add(int(part.replace('U+', ''), 16))
+    return codepoints
+
+
+class TestCharRangesMatchCharacters(unittest.TestCase):
+    """Verify that the unicode range string and the character set encode the exact same codepoints."""
+
+    def _assert_ranges_match_chars(self, text: str) -> None:
+        """Helper: check that chars and uranges from optimise_fonts contain identical codepoints."""
+        result = optimise_fonts(text, ['tests/Spirax-Regular.ttf'],
+                                fontpath='tests/output', print_stats=False)
+        chars_codepoints: set[int] = {ord(c) for c in result["chars"]}
+        ranges_codepoints: set[int] = _uranges_str_to_codepoints(result["uranges"])
+        self.assertEqual(chars_codepoints, ranges_codepoints,
+                         f"Mismatch: in chars but not ranges: {chars_codepoints - ranges_codepoints}, "
+                         f"in ranges but not chars: {ranges_codepoints - chars_codepoints}")
+
+    def test_ascii_text(self) -> None:
+        self._assert_ranges_match_chars("Hello, World! 0123456789")
+
+    def test_empty_text(self) -> None:
+        """Empty input still produces a space character in both representations."""
+        self._assert_ranges_match_chars("")
+
+    def test_mixed_scripts(self) -> None:
+        """Latin, Vietnamese diacritics, Japanese, and symbols."""
+        self._assert_ranges_match_chars(
+            "Hello café — «résumé» ▸ ✻ "
+            "Trăm năm trong cõi người ta "  # Vietnamese
+            "漢字テスト "                     # Kanji + Katakana
+            "αβγδ IVXLCDM "                  # Greek + Roman numeral chars
+            "🎉"                              # Emoji (outside BMP)
+        )
+
+    def test_sequential_and_scattered_codepoints(self) -> None:
+        """Mix of runs (a-z) and isolated codepoints to exercise range merging."""
+        self._assert_ranges_match_chars(
+            "abcdefghijklmnopqrstuvwxyz"  # one continuous range
+            "!@#$%"                        # scattered ASCII symbols
+            "\u00e0\u00e1\u00e2"           # àáâ — small Latin range
+            "\u2014\u2013\u2018\u2019"     # em-dash, en-dash, curly quotes — scattered
+        )
+
+    def test_single_character(self) -> None:
+        """Simplest non-empty case: one character plus the implicit space."""
+        self._assert_ranges_match_chars("X")
+
+
 # Used to verify the number of glyphs in a font matches the number of (unique!) characters in the test string
 def _count_glyphs_in_font(fontpath):
     # with open(fontpath, 'rb') as f:
@@ -131,6 +193,61 @@ class TestOptimiseFonts(unittest.TestCase):
         #   > font.getGlyphOrder()
         #   > ['.notdef', 'space']
         self.assertEqual(2, _count_glyphs_in_font('tests/output/Spirax-Regular.FontimizeSubset.woff2'))
+
+
+class TestOptimiseFontsInputFormats(unittest.TestCase):
+    """Test that fontTools handles various input font formats."""
+
+    def test_woff2_input(self) -> None:
+        """WOFF2 files can be used as input and re-subset to a new WOFF2."""
+        # First generate a WOFF2 from a TTF so we have a known input
+        result1 = optimise_fonts("Hello", ['tests/Whisper-Regular.ttf'],
+                                 fontpath='tests/output', subsetname='Stage1', print_stats=False)
+        woff2_input: str = result1["fonts"]['tests/Whisper-Regular.ttf']
+        self.assertTrue(woff2_input.endswith('.woff2'))
+
+        # Now use that WOFF2 as input
+        result2 = optimise_fonts("He", [woff2_input],
+                                 fontpath='tests/output', subsetname='Stage2', print_stats=False)
+        woff2_output: str = result2["fonts"][woff2_input]
+        self.assertTrue(os.path.exists(woff2_output))
+        # Fewer characters requested, so the re-subset should have fewer glyphs
+        stage1_glyphs: int = _count_glyphs_in_font(woff2_input)
+        stage2_glyphs: int = _count_glyphs_in_font(woff2_output)
+        self.assertLess(stage2_glyphs, stage1_glyphs)
+
+    def test_unsupported_format_warns(self) -> None:
+        """A font with an unrecognised extension should emit a warning."""
+        import warnings as w
+        # Create a dummy file with an unsupported extension
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='.xyz', delete=False) as f:
+            dummy_path: str = f.name
+        try:
+            with w.catch_warnings(record=True) as caught:
+                w.simplefilter('always')
+                try:
+                    optimise_fonts("x", [dummy_path], fontpath='tests/output', print_stats=False)
+                except Exception:
+                    pass  # fontTools will fail to parse the dummy file; we only care about the warning
+            format_warnings = [x for x in caught if "Unrecognised font format" in str(x.message)]
+            self.assertEqual(len(format_warnings), 1)
+            self.assertIn('.xyz', str(format_warnings[0].message))
+        finally:
+            os.unlink(dummy_path)
+
+    def test_overwrite_warning(self) -> None:
+        """Overwriting an existing output file should emit a warning."""
+        import warnings as w
+        # Run twice to the same output — second run should warn
+        optimise_fonts("Hi", ['tests/Whisper-Regular.ttf'],
+                       fontpath='tests/output', subsetname='OverwriteTest', print_stats=False)
+        with w.catch_warnings(record=True) as caught:
+            w.simplefilter('always')
+            optimise_fonts("Hi", ['tests/Whisper-Regular.ttf'],
+                           fontpath='tests/output', subsetname='OverwriteTest', print_stats=False)
+        overwrite_warnings = [x for x in caught if "already exists" in str(x.message)]
+        self.assertEqual(len(overwrite_warnings), 1)
 
 
 class TestOptimiseFontsForFiles(unittest.TestCase):

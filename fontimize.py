@@ -22,7 +22,8 @@ import sys
 import logging
 import warnings
 from bs4 import BeautifulSoup
-from ttf2web import TTF2Web
+from fontTools.ttLib import TTFont
+from fontTools.subset import Subsetter
 from os import path
 import cssutils
 import pathlib
@@ -32,6 +33,8 @@ from collections.abc import Callable, Collection
 from beartype import beartype
 
 cssutils.log.setLevel(logging.CRITICAL)
+
+_SUPPORTED_FONT_EXTENSIONS: set[str] = {'.ttf', '.otf', '.woff', '.woff2'}
 
 
 class FontimizeResult(TypedDict):
@@ -134,7 +137,6 @@ def _file_size_to_readable(size : int) -> str:
 @beartype
 def optimise_fonts(text : str, fonts : Collection[str] | str, fontpath : str = "", subsetname : str = "FontimizeSubset", verbose : bool = False, print_stats : bool = True) -> FontimizeResult:
     unique_fonts: set[str] = {fonts} if isinstance(fonts, str) else set(fonts)  # Deduplicate; accept single string
-    verbosity: int = 2 if verbose else 0 # ttf2web has 0, 1, 2, so match that to off and on
 
     res: FontimizeResult = {
         "css": set(),  # at this level there are no CSS files, include to prevent errors for API consumer
@@ -147,46 +149,70 @@ def optimise_fonts(text : str, fonts : Collection[str] | str, fontpath : str = "
     characters: set[str] = get_used_characters_in_str(text)
 
     char_list: list[str] = list(characters)
-    if verbosity >= 2:
+    if verbose:
         print("Characters:")
         print("  " + str(char_list))
     res["chars"] = characters # set of characters used in the input text
 
     char_ranges: list[charPair] = _get_char_ranges(char_list)
-    if verbosity >= 2:
+    if verbose:
         print("Character ranges:")
         print("  " + str(char_ranges))
 
     uranges_str: str = ', '.join(r.get_range() for r in char_ranges)
-    uranges: list[list[str]] = [[subsetname, uranges_str]] # subsetname here will be in the generated font, eg 'Arial.FontimizeSubset.woff2'
-    if verbosity >= 2:
+    if verbose:
         print("Unicode ranges:")
         print("  " + uranges_str)
     res["uranges"] = uranges_str # unicode ranges matching the characters used in the input text
 
-    # For each font, generate a new font file using only the used characters
-    # By default, place it in the same folder as the respective font, unless fontpath is specified
+    # For each font, generate a subset WOFF2 containing only the used characters.
+    # By default, place it in the same folder as the respective font, unless fontpath is specified.
+    # fontTools' subsetter preserves ligatures, contextual alternates, kerning and other
+    # OpenType layout features by default (layout_closure=True), so the subset font
+    # will still render correctly for the included characters.
     for font in unique_fonts:
+        font_ext: str = pathlib.Path(font).suffix.lower()
+        if font_ext not in _SUPPORTED_FONT_EXTENSIONS:
+            warnings.warn(f"Unrecognised font format '{font_ext}' for {font}, "
+                          f"supported formats: {', '.join(sorted(_SUPPORTED_FONT_EXTENSIONS))}")
+
         assetdir: str = fontpath or path.dirname(font) or "."
-        t2w: TTF2Web = TTF2Web(font, uranges, assetdir=assetdir)
-        woff2_list = t2w.generateWoff2(verbosity=verbosity)
-        # print(woff2_list)
-        assert len(woff2_list) == 1 # We only expect one font file to be generated, per font input
-        assert len(woff2_list[0]) == 2 # Pair of font, plus ranges -- we only care about [0], the font
-        res["fonts"][font] = woff2_list[0][0]
+        os.makedirs(assetdir, exist_ok=True)
 
-    if verbosity >= 2:
-        print("Generated the following fonts from the originals:")
-        for k in res["fonts"].keys():
-            print("  " + k + " ->\n    " + res["fonts"][k])
+        if verbose:
+            print(f"Processing {font}")
 
-    if (verbosity >= 2) or print_stats:
+        tt_font: TTFont = TTFont(font)
+        subsetter: Subsetter = Subsetter()
+        subsetter.populate(unicodes=[ord(c) for c in characters])
+        subsetter.subset(tt_font)
+
+        basename: str = os.path.splitext(os.path.basename(font))[0]
+        outfile: str = os.path.join(assetdir, f"{basename}.{subsetname}.woff2")
+
+        if os.path.exists(outfile):
+            warnings.warn(f"Output font file already exists and will be overwritten: {outfile}")
+
+        tt_font.flavor = 'woff2'
+        tt_font.save(outfile)
+        tt_font.close()
+
+        res["fonts"][font] = outfile
+
+        if verbose:
+            print(f"  Generated {outfile}")
+
+    if verbose or print_stats:
         print("Results:")
         print("  Fonts processed: " + str(len(res["fonts"])))
-        if (verbosity == 1): # If 2, printed above already
+        if not verbose: # If verbose, already printed per-font above
             print("  Generated (use verbose output for input -> generated map):")
             for k in res["fonts"].keys():
                 print("    " + res["fonts"][k])
+        else:
+            print("  Generated the following fonts from the originals:")
+            for k in res["fonts"].keys():
+                print("    " + k + " -> " + res["fonts"][k])
         sum_orig: int = _get_file_size_sum(list(res["fonts"].keys()))
         sum_new: int = _get_file_size_sum(list(res["fonts"].values()))
         print("  Total original font size: " + _file_size_to_readable(sum_orig))

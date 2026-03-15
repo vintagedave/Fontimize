@@ -22,7 +22,8 @@ classifiers = [
 keywords = ["font", "glyphs", "characters", "minimize", "minimizer", "minimization", "optimize", "optimization", "subset", "ssg", "web"]
 dependencies = [
   "beautifulsoup4>=4.11.0",
-  "ttf2web>=0.9.0",
+  "fonttools>=4.0.0",
+  "brotli>=1.0.0",
   "cssutils>=2.11.1",
   "pathvalidate>=2.5.0",
   "beartype>=0.18.0",
@@ -32,8 +33,6 @@ dependencies = [
 dev = [
   "mypy>=1.0.0",
   "pytest>=7.0.0",
-  "fonttools>=4.0.0",
-  "brotli>=1.0.0",
 ]
 
 [project.urls]
