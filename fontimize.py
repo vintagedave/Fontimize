@@ -246,13 +246,104 @@ def _get_path(known_file_path: str, relative_path: str) -> str:
 
     return path.normpath(full_path)
 
-def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
-    """Extract string content from :before and :after pseudo-elements.
+# Characters that counter()/counters() may generate, keyed by list-style-type.
+# When the style is known we include only the relevant characters; when unknown
+# we include all of them as a generous fallback.
+_COUNTER_CHARS_BY_STYLE: dict[str, str] = {
+    "decimal":          "0123456789",
+    "decimal-leading-zero": "0123456789",
+    "lower-alpha":      "abcdefghijklmnopqrstuvwxyz",
+    "lower-latin":      "abcdefghijklmnopqrstuvwxyz",
+    "upper-alpha":      "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "upper-latin":      "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "lower-roman":      "ivxlcdm",
+    "upper-roman":      "IVXLCDM",
+    "lower-greek":      "αβγδεζηθικλμνξοπρστυφχψω",
+    "georgian":         "ანბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰ",
+    "armenian":         "ԱԲԳԴԵԶԷԸԹԺԻԼԽԾԿՀՁՂՃՄՅՆՇՈՉՊՋՌՍՏՐՑՒՓՔՕՖ",
+    "hiragana":         "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわゐゑをん",
+    "hiragana-iroha":   "いろはにほへとちりぬるをわかよたれそつねならむうゐのおくやまけふこえてあさきゆめみしゑひもせす",
+    "katakana":         "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヰヱヲン",
+    "katakana-iroha":   "イロハニホヘトチリヌルヲワカヨタレソツネナラムウヰノオクヤマケフコエテアサキユメミシヱヒモセス",
+    "cjk-decimal":      "〇一二三四五六七八九",
+    "cjk-earthly-branch": "子丑寅卯辰巳午未申酉戌亥",
+    "cjk-heavenly-stem": "甲乙丙丁戊己庚辛壬癸",
+    "hebrew":           "אבגדהוזחטיכלמנסעפצקרשת",
+    "disc":             "•",
+    "circle":           "◦",
+    "square":           "▪",
+}
 
-    These characters (eg ▸ or ✻) appear in the rendered page and need to be
-    included in the font subset, even though they don't appear in HTML text.
-    Non-string content like counter() is ignored since it doesn't map to
-    fixed characters that need font glyphs.
+# All counter characters combined, used as fallback when style is unknown
+_ALL_COUNTER_CHARS: str = "".join(set("".join(_COUNTER_CHARS_BY_STYLE.values())))
+
+# All quote characters used across locales: curly double/single, guillemets,
+# German/Polish low-high, CJK corner brackets, plus straight quotes as fallback
+_ALL_QUOTE_CHARS: str = (
+    "\u201c\u201d"  # "" left/right double curly
+    "\u2018\u2019"  # '' left/right single curly
+    "\u00ab\u00bb"  # «» guillemets
+    "\u2039\u203a"  # ‹› single guillemets
+    "\u201e\u201f"  # „‟ German/Polish double low-high
+    "\u201a\u201b"  # ‚‛ single low-high
+    "\u300c\u300d"  # 「」 CJK corner brackets
+    "\u300e\u300f"  # 『』 CJK white corner brackets
+    "\"'"           # straight quotes as fallback
+)
+
+
+def _counter_style_from_css_text(css_text: str) -> str | None:
+    """Extract the list-style-type from a counter() or counters() CSS function.
+
+    Returns the style name (eg 'lower-greek') or None if not specified,
+    which means the CSS default of 'decimal'.
+
+    counter(name) -> None (decimal)
+    counter(name, lower-greek) -> 'lower-greek'
+    counters(name, ".", upper-roman) -> 'upper-roman'
+    """
+    # Strip the function wrapper: "counter(...)" or "counters(...)"
+    inner: str = css_text.split("(", 1)[1].rsplit(")", 1)[0].strip()
+    # Split on commas, respecting quoted strings (the separator in counters())
+    parts: list[str] = []
+    current: str = ""
+    in_quotes: bool = False
+    quote_char: str = ""
+    for ch in inner:
+        if ch in ('"', "'") and not in_quotes:
+            in_quotes = True
+            quote_char = ch
+            current += ch
+        elif ch == quote_char and in_quotes:
+            in_quotes = False
+            current += ch
+        elif ch == "," and not in_quotes:
+            parts.append(current.strip())
+            current = ""
+        else:
+            current += ch
+    parts.append(current.strip())
+
+    # counter(name) has 1 part, counter(name, style) has 2
+    # counters(name, separator) has 2, counters(name, separator, style) has 3
+    is_counters: bool = css_text.startswith("counters(")
+    style_index: int = 2 if is_counters else 1
+    if len(parts) > style_index:
+        return parts[style_index].strip()
+    return None
+
+
+def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
+    """Extract content characters from :before and :after pseudo-elements.
+
+    Handles several types of CSS content value:
+    - Quoted strings: characters extracted directly (eg '▸', '✻')
+    - counter()/counters(): adds the numeral characters that the counter style
+      would generate (eg digits for decimal, Roman numerals for upper-roman).
+      If the style is unrecognised, all numeral character sets are included.
+    - open-quote/close-quote: adds all locale quote mark characters
+    - attr(): emits a warning since the value depends on HTML attributes and
+      cannot be determined from CSS alone
     """
     sheet: cssutils.css.CSSStyleSheet = cssutils.parseString(css_contents)
 
@@ -267,9 +358,26 @@ def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
                     continue
                 for item in css_value:
                     if isinstance(item, cssutils.css.value.CSSFunction):
+                        css_text: str = item.cssText
+                        if css_text.startswith("counter(") or css_text.startswith("counters("):
+                            style: str | None = _counter_style_from_css_text(css_text)
+                            if style is None:
+                                style = "decimal"
+                            chars: str = _COUNTER_CHARS_BY_STYLE.get(style, _ALL_COUNTER_CHARS)
+                            contents.append(chars)
+                        elif css_text.startswith("attr("):
+                            warnings.warn(
+                                f"CSS content uses attr() in '{selector}' — the characters "
+                                f"it generates depend on HTML attribute values and cannot be "
+                                f"determined from CSS alone. You may need to include additional "
+                                f"characters via the addtl_text parameter."
+                            )
                         continue
                     value: str = item.value
-                    if value:
+                    if value in ("open-quote", "close-quote",
+                                 "no-open-quote", "no-close-quote"):
+                        contents.append(_ALL_QUOTE_CHARS)
+                    elif value and value not in ("none", "normal"):
                         contents.append(value)
 
     return contents

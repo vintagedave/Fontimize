@@ -297,9 +297,76 @@ class TestExtractPseudoElementsContent(unittest.TestCase):
         contents: list[str] = _extract_pseudo_elements_content(css)
         self.assertEqual(contents, ['X'])
 
-    def test_non_string_content_ignored(self) -> None:
-        """counter() and other non-string content values should not be returned."""
+    def test_counter_decimal_default(self) -> None:
+        """counter() with no style defaults to decimal digits."""
         css: str = "ol li::before { content: counter(item); }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 1)
+        self.assertTrue(all(ch in contents[0] for ch in "0123456789"))
+
+    def test_counter_with_style(self) -> None:
+        """counter() with an explicit style includes only that style's characters."""
+        css: str = "ol li::before { content: counter(item, upper-roman); }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 1)
+        self.assertTrue(all(ch in contents[0] for ch in "IVXLCDM"))
+        # Should not include decimal digits
+        self.assertFalse(any(ch in contents[0] for ch in "0123456789"))
+
+    def test_counter_lower_greek(self) -> None:
+        """counter() with lower-greek includes Greek lowercase letters."""
+        css: str = "li::before { content: counter(item, lower-greek); }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 1)
+        self.assertIn('α', contents[0])
+        self.assertIn('ω', contents[0])
+
+    def test_counters_with_style(self) -> None:
+        """counters() with a separator and style parses the style correctly."""
+        css: str = 'li::before { content: counters(item, ".", lower-roman); }'
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 1)
+        self.assertTrue(all(ch in contents[0] for ch in "ivxlcdm"))
+
+    def test_counter_unknown_style_includes_all(self) -> None:
+        """An unrecognised counter style falls back to all numeral characters."""
+        css: str = "li::before { content: counter(item, some-future-style); }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 1)
+        # Fallback should include digits AND roman numerals AND Greek etc
+        self.assertIn('0', contents[0])
+        self.assertIn('I', contents[0])
+        self.assertIn('α', contents[0])
+
+    def test_open_quote_includes_locale_quotes(self) -> None:
+        """open-quote adds all locale quote mark characters."""
+        css: str = "q::before { content: open-quote; }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 1)
+        for ch in '\u201c\u201d\u00ab\u00bb\u2018\u2019':  # "", «», ''
+            self.assertIn(ch, contents[0])
+
+    def test_close_quote_includes_locale_quotes(self) -> None:
+        """close-quote also adds all locale quote mark characters."""
+        css: str = "q::after { content: close-quote; }"
+        contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(len(contents), 1)
+        self.assertIn('\u00bb', contents[0])  # »
+
+    def test_attr_emits_warning(self) -> None:
+        """attr() cannot be resolved at CSS parse time and should emit a warning."""
+        import warnings as w
+        css: str = "a::after { content: attr(href); }"
+        with w.catch_warnings(record=True) as caught:
+            w.simplefilter('always')
+            contents: list[str] = _extract_pseudo_elements_content(css)
+        self.assertEqual(contents, [])
+        self.assertEqual(len(caught), 1)
+        self.assertIn('attr()', str(caught[0].message))
+
+    def test_none_and_normal_excluded(self) -> None:
+        """content: none and content: normal should not produce characters."""
+        css: str = "p::before { content: none; } q::after { content: normal; }"
         contents: list[str] = _extract_pseudo_elements_content(css)
         self.assertEqual(contents, [])
 
