@@ -1,4 +1,6 @@
 tests/output
+tests/tmp*.html
+tests/*.woff2
 tests/.DS_Store
 __pycache__
 .DS_Store

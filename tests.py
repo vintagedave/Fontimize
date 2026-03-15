@@ -554,22 +554,28 @@ class TestGetPath(unittest.TestCase):
 class TestCssDetection(unittest.TestCase):
     """Only actual .css files (or rel=stylesheet links) should be detected as CSS."""
 
+    def setUp(self) -> None:
+        self._tmpfiles: list[str] = []
+
+    def tearDown(self) -> None:
+        for path in self._tmpfiles:
+            if os.path.exists(path):
+                os.unlink(path)
+
     def _make_temp_html(self, link_href: str) -> str:
         f = tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, dir='tests')
         f.write(f'<html><head><link rel="alternate" href="{link_href}"></head><body>text</body></html>')
         f.flush()
         f.close()
+        self._tmpfiles.append(f.name)
         return f.name
 
     def test_css_href_detected(self) -> None:
         """A .css href should be recognized and parsed."""
         tmpfile: str = self._make_temp_html('css_test.css')
-        try:
-            result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
-            expected_css: str = os.path.join(os.path.dirname(tmpfile), 'css_test.css')
-            self.assertIn(expected_css, result['css'])
-        finally:
-            os.unlink(tmpfile)
+        result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+        expected_css: str = os.path.join(os.path.dirname(tmpfile), 'css_test.css')
+        self.assertIn(expected_css, result['css'])
 
     def test_non_css_file_not_detected(self) -> None:
         """An HTML file whose name happens to contain 'css' (not_a_css_file.html)
@@ -577,26 +583,20 @@ class TestCssDetection(unittest.TestCase):
         (The file exists on disk so the test fails cleanly on the assertion,
         not on a FileNotFoundError.)"""
         tmpfile: str = self._make_temp_html('not_a_css_file.html')
-        try:
-            result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
-            css_basenames: list[str] = [os.path.basename(p) for p in result['css']]
-            self.assertNotIn('not_a_css_file.html', css_basenames)
-        finally:
-            os.unlink(tmpfile)
+        result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+        css_basenames: list[str] = [os.path.basename(p) for p in result['css']]
+        self.assertNotIn('not_a_css_file.html', css_basenames)
 
     def test_css_href_with_query_string(self) -> None:
         """css_test.css?v=123 should be resolved to css_test.css — the query string
         must be stripped before looking up the file."""
         tmpfile: str = self._make_temp_html('css_test.css?v=123')
-        try:
-            result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
-            css_paths: set[str] = result['css']
-            for p in css_paths:
-                self.assertNotIn('?', p, f"Query string not stripped from CSS path: {p}")
-            css_basenames: list[str] = [os.path.basename(p) for p in css_paths]
-            self.assertIn('css_test.css', css_basenames)
-        except FileNotFoundError as e:
-            self.fail(f"Query string was not stripped from CSS href before file access: {e}")
+        result = optimise_fonts_for_files([tmpfile], fonts=['tests/Spirax-Regular.ttf'], print_stats=False)
+        css_paths: set[str] = result['css']
+        for p in css_paths:
+            self.assertNotIn('?', p, f"Query string not stripped from CSS path: {p}")
+        css_basenames: list[str] = [os.path.basename(p) for p in css_paths]
+        self.assertIn('css_test.css', css_basenames)
 
 
 class TestRewriteCss(unittest.TestCase):
