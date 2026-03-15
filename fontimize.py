@@ -53,6 +53,7 @@ class FontimizeStats(TypedDict):
     savings_bytes: int
     savings_percent: float
 
+@beartype
 def _empty_stats() -> FontimizeStats:
     """Return a FontimizeStats with all fields zeroed out."""
     return {"fonts_processed": 0, "files": [], "total_original_size": 0,
@@ -67,6 +68,7 @@ class FontimizeResult(TypedDict):
     rewritten_css: dict[str, str]
     stats: FontimizeStats
 
+@beartype
 def _get_unicode_string(char : str, withU : bool = True) -> str:
     return ('U+' if withU else '') + hex(ord(char))[2:].upper().zfill(4) # eg U+1234
 
@@ -95,6 +97,7 @@ def get_used_characters_in_html(html : str) -> set[str]:
     text: str = soup.get_text()
     return get_used_characters_in_str(text)
 
+@beartype
 class charPair:
     def __init__(self, first : str, second : str) -> None:
         self.first: str = first
@@ -121,6 +124,7 @@ class charPair:
 
 # Taking a sorted list of characters, find the sequential subsets and return pairs of the start and end
 # of each sequential subset
+@beartype
 def _get_char_ranges(chars : list[str]) -> list[charPair]:
     chars.sort()
     if not chars:
@@ -144,6 +148,7 @@ def _get_char_ranges(chars : list[str]) -> list[charPair]:
     return res
 
 # Convert to human-readable size in MB or KB
+@beartype
 def _file_size_to_readable(size : int) -> str:
     return str(round(size / 1024)) + "KB" if size < 1024 * 1024 else str(round(size / (1024 * 1024), 1)) + "MB" # nKB or n.nMB
 
@@ -273,6 +278,7 @@ def optimise_fonts_for_html_contents(html_contents : Collection[str] | str, font
     texts: list[str] = [BeautifulSoup(html, 'html.parser').get_text() for html in html_contents]
     return optimise_fonts("".join(texts), fonts, fontpath, verbose=verbose, print_stats=print_stats)
 
+@beartype
 def _find_font_face_urls(css_contents: str) -> list[str]:
     """Extract all font file URLs from @font-face src declarations.
 
@@ -298,6 +304,7 @@ def _find_font_face_urls(css_contents: str) -> list[str]:
 
     return urls
 
+@beartype
 def _get_path(known_file_path: str, relative_path: str) -> str:
     base_dir: str = path.dirname(known_file_path)
 
@@ -352,6 +359,7 @@ _ALL_QUOTE_CHARS: str = (
 )
 
 
+@beartype
 def _counter_style_from_css_text(css_text: str) -> str | None:
     """Extract the list-style-type from a counter() or counters() CSS function.
 
@@ -393,6 +401,7 @@ def _counter_style_from_css_text(css_text: str) -> str | None:
     return None
 
 
+@beartype
 def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
     """Extract content characters from :before and :after pseudo-elements.
 
@@ -443,6 +452,7 @@ def _extract_pseudo_elements_content(css_contents: str) -> list[str]:
     return contents
 
 
+@beartype
 def _rewrite_css(css_path: str, css_contents: str, font_mapping: dict[str, str],
                  output_dir: str) -> tuple[str, str]:
     """Rewrite @font-face src URLs in CSS to point to generated .woff2 fonts.
@@ -582,7 +592,8 @@ def optimise_fonts_for_files(files : list[str], font_output_dir : str = "", subs
                         href = href[0]
                     # Strip query strings and fragments before checking extension
                     clean_href: str = href.split('?')[0].split('#')[0]
-                    rel: list[str] = link.get('rel', [])
+                    rel_attr = link.get('rel')  # BS4 returns a list for rel
+                    rel: list[str] = list(rel_attr) if isinstance(rel_attr, list) else []
                     if clean_href.endswith('.css') or 'stylesheet' in rel:
                         adjusted_css_path = _get_path(f, clean_href) # It'll be relative, so relative to the HTML file
                         css_files.add(adjusted_css_path)
@@ -709,7 +720,7 @@ Examples:
         args.nostats = True
         args.verbose = False
         # Capture warnings into a list instead of printing to stderr
-        def _warning_handler(message, category, filename, lineno, file=None, line=None):
+        def _warning_handler(message : Warning | str, category : type[Warning], filename : str, lineno : int, file : object = None, line : str | None = None) -> None:
             _captured_warnings.append(str(message))
         warnings.showwarning = _warning_handler
 
